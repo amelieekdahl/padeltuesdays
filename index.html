@@ -794,26 +794,75 @@
 <script>
 // ==================== DATA STORE ====================
 const STORAGE_KEY = 'padel-tuesdays';
+const SHEETS_API = 'https://script.google.com/macros/s/AKfycbzUx9fK6HddJj8qd8OXSOWqhQaJS9nSDBfh9c3AVGyst6ExS_fgXf-H1gh_ipxCVgfp/exec';
 
 const SEASON_START = new Date('2026-03-31'); // First Tuesday
 
+// Cache for loaded data to avoid constant fetches
+let _cachedData = null;
+let _dataLoaded = false;
+
+const DEFAULT_DATA = {
+    groupA: [],
+    groupB: [],
+    subs: [],
+    weeks: [],
+    pairingHistory: [],
+    nextWeekRoster: null,
+    playlists: []
+};
+
 function loadData() {
+    // Return cached data if available, otherwise return from localStorage as fallback
+    if (_cachedData) return _cachedData;
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
-    return {
-        groupA: [],
-        groupB: [],
-        subs: [],
-        weeks: [],
-        pairingHistory: [],
-        nextWeekRoster: null, // proposed roster for next week
-        playlists: []
-    };
+    return JSON.parse(JSON.stringify(DEFAULT_DATA));
 }
 
 function saveData(data) {
+    // Save to localStorage immediately (fast)
+    _cachedData = data;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // Also save to Google Sheets (async, for shared persistence)
+    saveToCloud(data);
 }
+
+async function saveToCloud(data) {
+    try {
+        await fetch(SHEETS_API, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(data)
+        });
+    } catch (e) {
+        console.warn('Cloud save failed, data is still in localStorage:', e);
+    }
+}
+
+async function loadFromCloud() {
+    try {
+        const res = await fetch(SHEETS_API);
+        const data = await res.json();
+        if (data && data.groupA !== undefined) {
+            _cachedData = data;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            _dataLoaded = true;
+            return data;
+        }
+    } catch (e) {
+        console.warn('Cloud load failed, using localStorage:', e);
+    }
+    _dataLoaded = true;
+    return loadData();
+}
+
+// Load from cloud on page load
+loadFromCloud().then(data => {
+    _cachedData = data;
+    renderAll();
+});
 
 // Get all known players across all groups
 function getAllPlayers(data) {
@@ -1703,6 +1752,15 @@ const DEFAULT_PLAYLISTS = [
 const DEFAULT_GROUP_A = ['Louise', 'Ullis', 'Ida', 'Cecilia', 'Gabbi', 'Sara B', 'Amelie', 'Anna'];
 const DEFAULT_GROUP_B = ['Monica', 'Sara C', 'Ida', 'Cecilia', 'Gabbi', 'Sara B', 'Amelie', 'Anna'];
 
+function renderAll() {
+    renderRosters();
+    renderPlaylists();
+    populateWeekSelect();
+    loadWeek();
+    updateSeasonBar();
+    updateLeaderboard();
+}
+
 function init() {
     const data = loadData();
 
@@ -1719,13 +1777,7 @@ function init() {
     }
 
     saveData(data);
-
-    renderRosters();
-    renderPlaylists();
-    populateWeekSelect();
-    loadWeek();
-    updateSeasonBar();
-    updateLeaderboard();
+    renderAll();
 }
 
 init();
