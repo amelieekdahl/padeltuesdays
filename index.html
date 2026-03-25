@@ -44,6 +44,27 @@
             border-bottom: 2px solid var(--accent);
         }
 
+        .header-bg-slide {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
+            z-index: 0;
+        }
+
+        .header-bg-slide.active { opacity: 1; }
+
+        .header-bg-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(10,10,15,0.82) 0%, rgba(15,52,96,0.75) 100%);
+            z-index: 1;
+        }
+
+        .header h1, .header p { position: relative; z-index: 2; }
+
         .header::before {
             content: '';
             position: absolute;
@@ -53,7 +74,29 @@
             height: 200%;
             background: radial-gradient(circle, rgba(245, 197, 66, 0.05) 0%, transparent 50%);
             animation: pulse 4s ease-in-out infinite;
+            z-index: 2;
         }
+
+        /* Body background slideshow */
+        .body-bg-container {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .body-bg-slide {
+            position: absolute;
+            top: -5%; left: -5%;
+            width: 110%; height: 110%;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 2s ease-in-out;
+            filter: blur(20px) brightness(0.3);
+        }
+
+        .body-bg-slide.active { opacity: 1; }
 
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
@@ -808,7 +851,12 @@
 </head>
 <body>
 
+<div class="body-bg-container" id="bodyBgContainer"></div>
+
 <div class="header">
+    <div class="header-bg-slide" id="headerBgSlideA"></div>
+    <div class="header-bg-slide" id="headerBgSlideB"></div>
+    <div class="header-bg-overlay"></div>
     <h1>🏆 Padel <span>Tuesdays</span></h1>
     <p>Season 2026 • Rotating Rosters • 20 Weeks • 1 Champion</p>
 </div>
@@ -1946,6 +1994,71 @@ function renderPlaylists() {
     }).join('');
 }
 
+// ==================== BACKGROUND SLIDESHOW ====================
+let bgSlideInterval = null;
+let bgCurrentIndex = 0;
+let bgActiveSlot = 'A'; // toggle between A and B for crossfade
+
+function startBackgroundSlideshow() {
+    const photos = loadGallery();
+    if (photos.length === 0) {
+        // No photos — clear any existing backgrounds
+        document.getElementById('headerBgSlideA').style.backgroundImage = '';
+        document.getElementById('headerBgSlideB').style.backgroundImage = '';
+        document.getElementById('bodyBgContainer').innerHTML = '';
+        if (bgSlideInterval) { clearInterval(bgSlideInterval); bgSlideInterval = null; }
+        return;
+    }
+
+    // Set up body background slides (two for crossfade)
+    const container = document.getElementById('bodyBgContainer');
+    if (!document.getElementById('bodyBgSlideA')) {
+        container.innerHTML = `
+            <div class="body-bg-slide" id="bodyBgSlideA"></div>
+            <div class="body-bg-slide" id="bodyBgSlideB"></div>
+        `;
+    }
+
+    // Show first image immediately
+    bgCurrentIndex = Math.floor(Math.random() * photos.length);
+    showBgSlide(photos, bgCurrentIndex);
+
+    // Rotate every 8 seconds
+    if (bgSlideInterval) clearInterval(bgSlideInterval);
+    bgSlideInterval = setInterval(() => {
+        const currentPhotos = loadGallery();
+        if (currentPhotos.length === 0) {
+            startBackgroundSlideshow(); // will clear everything
+            return;
+        }
+        bgCurrentIndex = (bgCurrentIndex + 1) % currentPhotos.length;
+        showBgSlide(currentPhotos, bgCurrentIndex);
+    }, 8000);
+}
+
+function showBgSlide(photos, index) {
+    const photo = photos[index];
+    const incoming = bgActiveSlot === 'A' ? 'B' : 'A';
+
+    // Header crossfade
+    const headerIncoming = document.getElementById('headerBgSlide' + incoming);
+    const headerOutgoing = document.getElementById('headerBgSlide' + bgActiveSlot);
+    headerIncoming.style.backgroundImage = `url(${photo.data})`;
+    headerIncoming.classList.add('active');
+    headerOutgoing.classList.remove('active');
+
+    // Body crossfade
+    const bodyIncoming = document.getElementById('bodyBgSlide' + incoming);
+    const bodyOutgoing = document.getElementById('bodyBgSlide' + bgActiveSlot);
+    if (bodyIncoming && bodyOutgoing) {
+        bodyIncoming.style.backgroundImage = `url(${photo.data})`;
+        bodyIncoming.classList.add('active');
+        bodyOutgoing.classList.remove('active');
+    }
+
+    bgActiveSlot = incoming;
+}
+
 // ==================== GALLERY ====================
 const GALLERY_KEY = 'padel-tuesdays-gallery';
 let currentLightboxIndex = 0;
@@ -2006,6 +2119,7 @@ function processFiles(files) {
                     try {
                         saveGallery(photos);
                         renderGallery();
+                        startBackgroundSlideshow();
                         showToast(`${files.length} photo${files.length > 1 ? 's' : ''} uploaded! 📸`);
                     } catch (err) {
                         if (err.name === 'QuotaExceededError' || err.code === 22) {
@@ -2092,6 +2206,7 @@ function removePhoto(photoId) {
     const photos = loadGallery().filter(p => p.id !== photoId);
     saveGallery(photos);
     renderGallery();
+    startBackgroundSlideshow();
     showToast('Photo removed');
 }
 
@@ -2174,6 +2289,7 @@ function init() {
     saveData(data);
     renderAll();
     renderGallery();
+    startBackgroundSlideshow();
 }
 
 init();
