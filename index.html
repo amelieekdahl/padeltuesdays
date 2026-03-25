@@ -2059,22 +2059,107 @@ function showBgSlide(photos, index) {
     bgActiveSlot = incoming;
 }
 
-// ==================== GALLERY ====================
-const GALLERY_KEY = 'padel-tuesdays-gallery';
+// ==================== GALLERY (Cloud-backed via Google Sheets) ====================
+let _galleryCache = [];       // in-memory cache of photos (with base64 data)
+let _galleryCacheReady = false;
 let currentLightboxIndex = 0;
 
-function loadGallery() {
+// --- Cloud API helpers ---
+
+async function cloudGalleryList() {
+    // Fetch metadata only (fast) — no base64 data
     try {
-        const raw = localStorage.getItem(GALLERY_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
+        const res = await fetch(SHEETS_API + '?action=getGallery');
+        return await res.json();
+    } catch (e) {
+        console.warn('Cloud gallery list failed:', e);
+        return [];
+    }
 }
 
-function saveGallery(photos) {
-    localStorage.setItem(GALLERY_KEY, JSON.stringify(photos));
+async function cloudGalleryFull() {
+    // Fetch everything including base64 data (heavy but needed for slideshow/lightbox)
+    try {
+        const res = await fetch(SHEETS_API + '?action=getGallery&withData=true');
+        return await res.json();
+    } catch (e) {
+        console.warn('Cloud gallery full load failed:', e);
+        return [];
+    }
 }
 
-// Drag & drop
+async function cloudGetPhoto(id) {
+    try {
+        const res = await fetch(SHEETS_API + '?action=getPhoto&id=' + encodeURIComponent(id));
+        return await res.json();
+    } catch (e) {
+        console.warn('Cloud getPhoto failed:', e);
+        return null;
+    }
+}
+
+async function cloudAddPhoto(photo) {
+    try {
+        await fetch(SHEETS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'addPhoto', photo })
+        });
+    } catch (e) {
+        console.warn('Cloud addPhoto failed:', e);
+        throw e;
+    }
+}
+
+async function cloudUpdateCaption(id, caption) {
+    try {
+        await fetch(SHEETS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'updateCaption', id, caption })
+        });
+    } catch (e) {
+        console.warn('Cloud updateCaption failed:', e);
+    }
+}
+
+async function cloudDeletePhoto(id) {
+    try {
+        await fetch(SHEETS_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'deletePhoto', id })
+        });
+    } catch (e) {
+        console.warn('Cloud deletePhoto failed:', e);
+    }
+}
+
+// --- Gallery cache (replaces localStorage gallery) ---
+
+function loadGallery() {
+    // Synchronous read from in-memory cache (used by slideshow, lightbox, render)
+    return _galleryCache;
+}
+
+async function refreshGalleryCache() {
+    // Pull full gallery from cloud into memory
+    try {
+        _galleryCache = await cloudGalleryFull();
+        _galleryCacheReady = true;
+    } catch (e) {
+        console.warn('Gallery cache refresh failed:', e);
+        if (!_galleryCacheReady) _galleryCache = [];
+    }
+}
+
+// Initial load of gallery from cloud
+refreshGalleryCache().then(() => {
+    renderGallery();
+    startBackgroundSlideshow();
+});
+
+// --- Drag & drop ---
 const uploadZone = document.getElementById('uploadZone');
 uploadZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -2098,13 +2183,14 @@ function handleFileSelect(event) {
 
 function processFiles(files) {
     let processed = 0;
-    const photos = loadGallery();
+    const total = files.length;
+
+    showToast(`Uploading ${total} photo${total > 1 ? 's' : ''}...`);
 
     for (const file of files) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            // Resize to save localStorage space
-            resizeImage(e.target.result, 1200, (resizedDataUrl) => {
+            resizeImage(e.target.result, 1200, async (resizedDataUrl) => {
                 const photo = {
                     id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
                     data: resizedDataUrl,
@@ -2112,22 +2198,22 @@ function processFiles(files) {
                     date: new Date().toISOString().split('T')[0],
                     filename: file.name
                 };
-                photos.push(photo);
+
+                // Optimistic: add to local cache immediately
+                _galleryCache.push(photo);
                 processed++;
 
-                if (processed === files.length) {
-                    try {
-                        saveGallery(photos);
-                        renderGallery();
-                        startBackgroundSlideshow();
-                        showToast(`${files.length} photo${files.length > 1 ? 's' : ''} uploaded! 📸`);
-                    } catch (err) {
-                        if (err.name === 'QuotaExceededError' || err.code === 22) {
-                            showToast('Storage full! Try smaller or fewer images.');
-                        } else {
-                            showToast('Upload failed — try again.');
-                        }
-                    }
+                // Upload to cloud
+                try {
+                    await cloudAddPhoto(photo);
+                } catch (err) {
+                    console.warn('Upload to cloud failed for', file.name, err);
+                }
+
+                if (processed === total) {
+                    renderGallery();
+                    startBackgroundSlideshow();
+                    showToast(`${total} photo${total > 1 ? 's' : ''} uploaded! 📸`);
                 }
             });
         };
@@ -2188,25 +2274,32 @@ function renderGallery() {
     `).join('');
 }
 
-function editCaption(photoId) {
-    const photos = loadGallery();
-    const photo = photos.find(p => p.id === photoId);
+async function editCaption(photoId) {
+    const photo = _galleryCache.find(p => p.id === photoId);
     if (!photo) return;
 
     const newCaption = prompt('Caption:', photo.caption || '');
     if (newCaption === null) return; // cancelled
 
+    // Update local cache immediately
     photo.caption = newCaption;
-    saveGallery(photos);
     renderGallery();
+
+    // Persist to cloud
+    await cloudUpdateCaption(photoId, newCaption);
+    showToast('Caption updated ✏️');
 }
 
-function removePhoto(photoId) {
+async function removePhoto(photoId) {
     if (!confirm('Remove this photo?')) return;
-    const photos = loadGallery().filter(p => p.id !== photoId);
-    saveGallery(photos);
+
+    // Remove from local cache immediately
+    _galleryCache = _galleryCache.filter(p => p.id !== photoId);
     renderGallery();
     startBackgroundSlideshow();
+
+    // Persist to cloud
+    await cloudDeletePhoto(photoId);
     showToast('Photo removed');
 }
 
@@ -2288,8 +2381,7 @@ function init() {
 
     saveData(data);
     renderAll();
-    renderGallery();
-    startBackgroundSlideshow();
+    // Gallery & slideshow are loaded async from cloud via refreshGalleryCache()
 }
 
 init();
