@@ -625,6 +625,176 @@
         .empty-state .emoji { font-size: 3rem; margin-bottom: 1rem; }
         .empty-state p { margin-bottom: 0.5rem; }
 
+        /* Gallery */
+        .gallery-upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        .gallery-upload-zone:hover,
+        .gallery-upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(245, 197, 66, 0.05);
+        }
+
+        .gallery-upload-zone .upload-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+        .gallery-upload-zone p { color: var(--text-muted); font-size: 0.9rem; }
+        .gallery-upload-zone .upload-hint { font-size: 0.8rem; margin-top: 0.25rem; }
+        .gallery-upload-zone input[type="file"] { display: none; }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .gallery-item {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .gallery-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            display: block;
+        }
+
+        .gallery-item-info {
+            padding: 0.6rem 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .gallery-item-caption {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
+            margin-right: 0.5rem;
+        }
+
+        .gallery-item-date {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .gallery-item .remove-photo {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.7);
+            color: var(--text-muted);
+            border: none;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .gallery-item:hover .remove-photo { display: flex; }
+        .gallery-item .remove-photo:hover { color: var(--red); background: rgba(0,0,0,0.9); }
+
+        /* Lightbox */
+        .lightbox-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.92);
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            cursor: zoom-out;
+        }
+
+        .lightbox-overlay.show { display: flex; }
+
+        .lightbox-overlay img {
+            max-width: 90vw;
+            max-height: 80vh;
+            border-radius: 8px;
+            object-fit: contain;
+        }
+
+        .lightbox-caption {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            border: none;
+            font-size: 2rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .lightbox-nav:hover { background: rgba(255,255,255,0.2); }
+        .lightbox-prev { left: 1rem; }
+        .lightbox-next { right: 1rem; }
+
+        .lightbox-close {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 2rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .lightbox-close:hover { color: var(--text); }
+
+        .gallery-filter-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .gallery-count {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+
         .info-box {
             padding: 0.75rem 1rem;
             border-radius: 8px;
@@ -648,6 +818,7 @@
     <button onclick="showSection('nextweek')">📅 Next Week</button>
     <button onclick="showSection('leaderboard')">🏅 Leaderboard</button>
     <button onclick="showSection('history')">📜 History</button>
+    <button onclick="showSection('gallery')">📸 Gallery</button>
     <button onclick="showSection('players')">👥 Players</button>
 </div>
 
@@ -716,6 +887,45 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- GALLERY -->
+    <div id="gallery" class="section">
+        <div class="card">
+            <h2>📸 Photo Gallery</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                Share your best padel moments! Drop photos or click to upload.
+            </p>
+
+            <div class="gallery-upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📷</div>
+                <p><strong>Drop photos here</strong> or click to browse</p>
+                <p class="upload-hint">JPG, PNG, WEBP • Add a caption after upload</p>
+                <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFileSelect(event)">
+            </div>
+
+            <div class="gallery-filter-bar" id="galleryFilterBar" style="display:none;">
+                <button class="btn btn-secondary active" onclick="filterGallery('all', this)">All</button>
+                <span class="gallery-count" id="galleryCount"></span>
+            </div>
+
+            <div class="gallery-grid" id="galleryGrid">
+                <div class="empty-state">
+                    <div class="emoji">📷</div>
+                    <p>No photos yet.</p>
+                    <p>Upload your padel memories!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div class="lightbox-overlay" id="lightbox" onclick="closeLightbox(event)">
+        <button class="lightbox-close" onclick="closeLightbox(event)">✕</button>
+        <button class="lightbox-nav lightbox-prev" onclick="navigateLightbox(event, -1)">‹</button>
+        <img id="lightboxImg" src="" alt="">
+        <div class="lightbox-caption" id="lightboxCaption"></div>
+        <button class="lightbox-nav lightbox-next" onclick="navigateLightbox(event, 1)">›</button>
     </div>
 
     <!-- PLAYERS -->
@@ -1600,6 +1810,7 @@ function showSection(id) {
     if (id === 'leaderboard') updateLeaderboard();
     if (id === 'history') updateHistory();
     if (id === 'nextweek') renderNextWeek();
+    if (id === 'gallery') renderGallery();
     if (id === 'players') renderRosters();
 }
 
@@ -1735,6 +1946,190 @@ function renderPlaylists() {
     }).join('');
 }
 
+// ==================== GALLERY ====================
+const GALLERY_KEY = 'padel-tuesdays-gallery';
+let currentLightboxIndex = 0;
+
+function loadGallery() {
+    try {
+        const raw = localStorage.getItem(GALLERY_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function saveGallery(photos) {
+    localStorage.setItem(GALLERY_KEY, JSON.stringify(photos));
+}
+
+// Drag & drop
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+});
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+    if (files.length > 0) processFiles(files);
+});
+
+function handleFileSelect(event) {
+    const files = [...event.target.files].filter(f => f.type.startsWith('image/'));
+    if (files.length > 0) processFiles(files);
+    event.target.value = ''; // reset so same file can be re-selected
+}
+
+function processFiles(files) {
+    let processed = 0;
+    const photos = loadGallery();
+
+    for (const file of files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            // Resize to save localStorage space
+            resizeImage(e.target.result, 1200, (resizedDataUrl) => {
+                const photo = {
+                    id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+                    data: resizedDataUrl,
+                    caption: '',
+                    date: new Date().toISOString().split('T')[0],
+                    filename: file.name
+                };
+                photos.push(photo);
+                processed++;
+
+                if (processed === files.length) {
+                    try {
+                        saveGallery(photos);
+                        renderGallery();
+                        showToast(`${files.length} photo${files.length > 1 ? 's' : ''} uploaded! 📸`);
+                    } catch (err) {
+                        if (err.name === 'QuotaExceededError' || err.code === 22) {
+                            showToast('Storage full! Try smaller or fewer images.');
+                        } else {
+                            showToast('Upload failed — try again.');
+                        }
+                    }
+                }
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function resizeImage(dataUrl, maxDim, callback) {
+    const img = new Image();
+    img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        callback(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.src = dataUrl;
+}
+
+function renderGallery() {
+    const photos = loadGallery();
+    const grid = document.getElementById('galleryGrid');
+    const filterBar = document.getElementById('galleryFilterBar');
+    const countEl = document.getElementById('galleryCount');
+
+    if (photos.length === 0) {
+        filterBar.style.display = 'none';
+        grid.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <div class="emoji">📷</div>
+                <p>No photos yet.</p>
+                <p>Upload your padel memories!</p>
+            </div>`;
+        return;
+    }
+
+    filterBar.style.display = 'flex';
+    countEl.textContent = `${photos.length} photo${photos.length !== 1 ? 's' : ''}`;
+
+    grid.innerHTML = photos.map((photo, i) => `
+        <div class="gallery-item" onclick="openLightbox(${i})">
+            <img src="${photo.data}" alt="${photo.caption || photo.filename}" loading="lazy">
+            <div class="gallery-item-info">
+                <span class="gallery-item-caption" id="caption-${photo.id}"
+                    onclick="event.stopPropagation(); editCaption('${photo.id}')"
+                    title="Click to edit caption">
+                    ${photo.caption || '✏️ Add caption...'}
+                </span>
+                <span class="gallery-item-date">${photo.date}</span>
+            </div>
+            <button class="remove-photo" onclick="event.stopPropagation(); removePhoto('${photo.id}')">✕</button>
+        </div>
+    `).join('');
+}
+
+function editCaption(photoId) {
+    const photos = loadGallery();
+    const photo = photos.find(p => p.id === photoId);
+    if (!photo) return;
+
+    const newCaption = prompt('Caption:', photo.caption || '');
+    if (newCaption === null) return; // cancelled
+
+    photo.caption = newCaption;
+    saveGallery(photos);
+    renderGallery();
+}
+
+function removePhoto(photoId) {
+    if (!confirm('Remove this photo?')) return;
+    const photos = loadGallery().filter(p => p.id !== photoId);
+    saveGallery(photos);
+    renderGallery();
+    showToast('Photo removed');
+}
+
+function openLightbox(index) {
+    const photos = loadGallery();
+    if (photos.length === 0) return;
+    currentLightboxIndex = index;
+    const photo = photos[index];
+    document.getElementById('lightboxImg').src = photo.data;
+    document.getElementById('lightboxCaption').textContent = photo.caption || photo.filename || '';
+    document.getElementById('lightbox').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(event) {
+    if (event.target.classList.contains('lightbox-nav') || event.target.classList.contains('lightbox-prev') || event.target.classList.contains('lightbox-next')) return;
+    document.getElementById('lightbox').classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+function navigateLightbox(event, direction) {
+    event.stopPropagation();
+    const photos = loadGallery();
+    if (photos.length === 0) return;
+    currentLightboxIndex = (currentLightboxIndex + direction + photos.length) % photos.length;
+    const photo = photos[currentLightboxIndex];
+    document.getElementById('lightboxImg').src = photo.data;
+    document.getElementById('lightboxCaption').textContent = photo.caption || photo.filename || '';
+}
+
+// Keyboard navigation for lightbox
+document.addEventListener('keydown', (e) => {
+    if (!document.getElementById('lightbox').classList.contains('show')) return;
+    if (e.key === 'Escape') { document.getElementById('lightbox').classList.remove('show'); document.body.style.overflow = ''; }
+    if (e.key === 'ArrowLeft') navigateLightbox(e, -1);
+    if (e.key === 'ArrowRight') navigateLightbox(e, 1);
+});
+
 // ==================== INIT ====================
 const DEFAULT_PLAYLISTS = [
     'spotify:playlist:2akGcecFZy9bx3Clvei53L',
@@ -1778,6 +2173,7 @@ function init() {
 
     saveData(data);
     renderAll();
+    renderGallery();
 }
 
 init();
