@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padel Tuesdays 🏆</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+        :root {
+            --bg: #0a0a0f;
+            --surface: #141420;
+            --surface2: #1c1c2e;
+            --border: #2a2a40;
+            --accent: #f5c542;
+            --accent2: #e8a317;
+            --green: #4ade80;
+            --red: #f87171;
+            --blue: #60a5fa;
+            --purple: #a78bfa;
+            --text: #e8e8f0;
+            --text-muted: #8888a0;
+            --court1: #3b82f6;
+            --court2: #8b5cf6;
+            --orange: #fb923c;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(245, 197, 66, 0.05) 0%, transparent 50%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            position: relative;
+        }
+
+        .header h1 span { color: var(--accent); }
+
+        .header p {
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+            font-size: 0.95rem;
+            position: relative;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .nav button {
+            padding: 0.6rem 1.2rem;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-muted);
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .nav button:hover { border-color: var(--accent); color: var(--text); }
+        .nav button.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+            font-weight: 700;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        .section { display: none; }
+        .section.active { display: block; }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Player chips */
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .player-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: var(--surface2);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .player-chip .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .player-chip .avatar.group-a { background: var(--blue); color: #000; }
+        .player-chip .avatar.group-b { background: var(--purple); color: #000; }
+        .player-chip .avatar.sub { background: var(--orange); color: #000; }
+        .player-chip .avatar.default { background: var(--accent); color: #000; }
+
+        .player-chip .name {
+            font-weight: 500;
+            font-size: 0.9rem;
+            flex-grow: 1;
+        }
+
+        .player-chip .badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-a { background: rgba(96, 165, 250, 0.2); color: var(--blue); }
+        .badge-b { background: rgba(167, 139, 250, 0.2); color: var(--purple); }
+        .badge-sub { background: rgba(251, 146, 60, 0.2); color: var(--orange); }
+
+        .player-chip .remove {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+
+        .player-chip .remove:hover { color: var(--red); }
+
+        .add-player-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        input, select {
+            padding: 0.6rem 1rem;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus { border-color: var(--accent); }
+        input { flex: 1; }
+
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-primary:hover { background: var(--accent2); }
+
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { border-color: var(--accent); }
+
+        .btn-danger {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+        }
+
+        .btn-success {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        /* Match Day */
+        .week-selector {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .week-selector select { min-width: 200px; }
+
+        .courts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+            .courts-grid { grid-template-columns: 1fr; }
+        }
+
+        .court-card {
+            border-radius: 12px;
+            padding: 1.25rem;
+            border: 2px solid;
+        }
+
+        .court-card.court-1 {
+            background: rgba(59, 130, 246, 0.08);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .court-card.court-2 {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .court-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }
+
+        .court-1 .court-label { color: var(--court1); }
+        .court-2 .court-label { color: var(--court2); }
+
+        .matchup {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .team {
+            text-align: center;
+            flex: 1;
+        }
+
+        .team-names {
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .vs {
+            font-weight: 800;
+            color: var(--accent);
+            font-size: 0.8rem;
+        }
+
+        .score-input {
+            width: 60px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            padding: 0.4rem;
+        }
+
+        .second-half-header {
+            text-align: center;
+            padding: 1rem;
+            margin: 1rem 0;
+            background: linear-gradient(90deg, transparent, rgba(245, 197, 66, 0.1), transparent);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .second-half-header h3 {
+            color: var(--accent);
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .second-half-header p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .winner-court {
+            background: rgba(245, 197, 66, 0.08);
+            border-color: rgba(245, 197, 66, 0.3);
+        }
+
+        .winner-court .court-label { color: var(--accent); }
+
+        /* Leaderboard */
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .leaderboard-table th {
+            text-align: left;
+            padding: 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .leaderboard-table td {
+            padding: 0.75rem;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .leaderboard-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+        .rank { font-weight: 800; font-size: 1.1rem; }
+        .rank-1 { color: #ffd700; }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
+
+        .games-bar {
+            height: 6px;
+            background: var(--surface2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+
+        .games-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        /* History */
+        .week-history {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+        }
+
+        .week-history-header {
+            padding: 0.75rem 1rem;
+            background: var(--surface2);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .week-history-header:hover { background: var(--border); }
+
+        .week-history-body { padding: 1rem; display: none; }
+        .week-history-body.open { display: block; }
+
+        .history-match {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            font-size: 0.85rem;
+        }
+
+        .history-match + .history-match {
+            border-top: 1px solid var(--border);
+        }
+
+        /* Next Week planner */
+        .next-week-card {
+            background: linear-gradient(135deg, rgba(245, 197, 66, 0.06), rgba(245, 197, 66, 0.02));
+            border: 1px solid rgba(245, 197, 66, 0.25);
+        }
+
+        .roster-slot {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--surface2);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 0.5rem;
+        }
+
+        .roster-slot .slot-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.7rem;
+            flex-shrink: 0;
+        }
+
+        .roster-slot select {
+            flex: 1;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.85rem;
+        }
+
+        .roster-slot .sub-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            background: rgba(251, 146, 60, 0.2);
+            color: var(--orange);
+            display: none;
+        }
+
+        .roster-slot.is-sub .sub-badge { display: inline-block; }
+        .roster-slot.is-sub { border-color: rgba(251, 146, 60, 0.4); }
+
+        .group-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .group-indicator.group-a { background: rgba(96, 165, 250, 0.15); color: var(--blue); }
+        .group-indicator.group-b { background: rgba(167, 139, 250, 0.15); color: var(--purple); }
+
+        /* Season bar */
+        .season-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-size: 0.85rem;
+        }
+
+        .season-progress {
+            height: 4px;
+            background: var(--surface2);
+            border-radius: 2px;
+            flex: 1;
+            margin: 0 1rem;
+            overflow: hidden;
+        }
+
+        .season-progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.5s;
+        }
+
+        /* Spotify */
+        .spotify-card {
+            background: linear-gradient(135deg, rgba(30, 215, 96, 0.08), rgba(30, 215, 96, 0.02));
+            border: 1px solid rgba(30, 215, 96, 0.25);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .spotify-card h3 {
+            color: #1DB954;
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .spotify-card iframe {
+            border-radius: 8px;
+            width: 100%;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show { display: flex; }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal h3 { margin-bottom: 1rem; }
+        .modal p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.9rem; }
+
+        .modal-buttons {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+        }
+
+        .coin { font-size: 3rem; margin-bottom: 1rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--accent);
+            color: #000;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: transform 0.3s ease;
+            z-index: 200;
+        }
+
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state .emoji { font-size: 3rem; margin-bottom: 1rem; }
+        .empty-state p { margin-bottom: 0.5rem; }
+
+        .info-box {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .info-box.info { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); color: var(--blue); }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🏆 Padel <span>Tuesdays</span></h1>
+    <p>Season 2026 • Rotating Rosters • 20 Weeks • 1 Champion</p>
+</div>
+
+<div class="nav">
+    <button class="active" onclick="showSection('matchday')">📋 Match Day</button>
+    <button onclick="showSection('nextweek')">📅 Next Week</button>
+    <button onclick="showSection('leaderboard')">🏅 Leaderboard</button>
+    <button onclick="showSection('history')">📜 History</button>
+    <button onclick="showSection('players')">👥 Players</button>
+</div>
+
+<div class="container">
+
+    <!-- MATCH DAY -->
+    <div id="matchday" class="section active">
+        <div class="season-bar">
+            <span id="seasonWeekLabel">Week 0 / 20</span>
+            <div class="season-progress">
+                <div class="season-progress-fill" id="seasonProgressFill" style="width: 0%"></div>
+            </div>
+            <span id="seasonWeeksLeft">20 weeks left</span>
+        </div>
+
+        <div class="card">
+            <h2>📋 This Week's Matches</h2>
+            <div class="week-selector">
+                <select id="weekSelect" onchange="loadWeek()"></select>
+            </div>
+
+            <div id="matchDisplay">
+                <div class="empty-state">
+                    <div class="emoji">🎾</div>
+                    <p>No matches generated yet.</p>
+                    <p>Set up your rosters and plan next week!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEXT WEEK PLANNER -->
+    <div id="nextweek" class="section">
+        <div class="card next-week-card">
+            <h2>📅 Next Week Planner</h2>
+            <div id="nextWeekInfo"></div>
+            <div id="nextWeekRoster"></div>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;">
+                <button class="btn btn-primary" onclick="confirmAndGenerate()">🎲 Confirm & Generate Matches</button>
+                <button class="btn btn-secondary" onclick="resetNextWeekToDefault()">🔄 Reset to Default Roster</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div id="leaderboard" class="section">
+        <div class="card">
+            <h2>🏅 Season Standings</h2>
+            <div id="leaderboardContent">
+                <div class="empty-state">
+                    <div class="emoji">📊</div>
+                    <p>No scores recorded yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="history" class="section">
+        <div class="card">
+            <h2>📜 Match History</h2>
+            <div id="historyContent">
+                <div class="empty-state">
+                    <div class="emoji">📚</div>
+                    <p>No completed weeks yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PLAYERS -->
+    <div id="players" class="section">
+        <div class="card">
+            <h2>👥 Roster Management</h2>
+            <div class="info-box info">
+                <strong>How it works:</strong> Group A and Group B alternate each week. Subs can fill in for anyone who can't make it.
+            </div>
+
+            <h3>🔵 Group A — Odd weeks (Mar 31, Apr 14, ...)</h3>
+            <div class="add-player-form">
+                <input type="text" id="newPlayerA" placeholder="Add to Group A..." onkeypress="if(event.key==='Enter')addRosterPlayer('A')">
+                <button class="btn btn-primary" onclick="addRosterPlayer('A')">Add</button>
+            </div>
+            <div class="player-grid" id="groupAGrid" style="margin-bottom: 1.5rem;"></div>
+
+            <h3>🟣 Group B — Even weeks (Apr 7, Apr 21, ...)</h3>
+            <div class="add-player-form">
+                <input type="text" id="newPlayerB" placeholder="Add to Group B..." onkeypress="if(event.key==='Enter')addRosterPlayer('B')">
+                <button class="btn btn-primary" onclick="addRosterPlayer('B')">Add</button>
+            </div>
+            <div class="player-grid" id="groupBGrid" style="margin-bottom: 1.5rem;"></div>
+
+            <h3>🟠 Substitute Pool</h3>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                Players available to sub in when someone can't make it.
+            </p>
+            <div class="add-player-form">
+                <input type="text" id="newPlayerSub" placeholder="Add a sub..." onkeypress="if(event.key==='Enter')addRosterPlayer('sub')">
+                <button class="btn btn-primary" onclick="addRosterPlayer('sub')">Add</button>
+            </div>
+            <div class="player-grid" id="subGrid" style="margin-bottom: 1.5rem;"></div>
+        </div>
+
+        <div class="card spotify-card" style="border: 1px solid rgba(30, 215, 96, 0.25);">
+            <h2 style="color: #1DB954;">🎵 Weekly Playlists</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                Each Tuesday gets a different playlist, rotating through the pool.
+            </p>
+            <div class="add-player-form">
+                <input type="text" id="newPlaylistUri" placeholder="Paste Spotify playlist link or URI..." style="flex: 2;">
+                <button class="btn btn-primary" onclick="addPlaylist()" style="background: #1DB954; border-color: #1DB954;">Add</button>
+            </div>
+            <div id="playlistGrid" style="margin-top: 0.75rem;"></div>
+        </div>
+
+        <div class="card">
+            <h2>⚙️ Season Management</h2>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button class="btn btn-danger" onclick="resetSeason()">🗑 Reset Season</button>
+                <button class="btn btn-secondary" onclick="exportData()">📤 Export Data</button>
+                <button class="btn btn-secondary" onclick="importData()">📥 Import Data</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Coin Toss Modal -->
+<div class="modal-overlay" id="coinModal">
+    <div class="modal">
+        <div class="coin">🪙</div>
+        <h3>It's a Tie!</h3>
+        <p id="coinModalText">Both teams tied. Who wins the coin toss?</p>
+        <div class="modal-buttons">
+            <button class="btn btn-primary" id="coinTeamA" onclick="resolveCoinToss('A')">Team A</button>
+            <button class="btn btn-primary" id="coinTeamB" onclick="resolveCoinToss('B')">Team B</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== DATA STORE ====================
+const STORAGE_KEY = 'padel-tuesdays';
+
+const SEASON_START = new Date('2026-03-31'); // First Tuesday
+
+function loadData() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+    return {
+        groupA: [],
+        groupB: [],
+        subs: [],
+        weeks: [],
+        pairingHistory: [],
+        nextWeekRoster: null, // proposed roster for next week
+        playlists: []
+    };
+}
+
+function saveData(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// Get all known players across all groups
+function getAllPlayers(data) {
+    const all = new Set([...data.groupA, ...data.groupB, ...data.subs]);
+    // Also include players from completed weeks (in case they were removed from rosters)
+    for (const week of data.weeks) {
+        if (!week.firstHalf) continue;
+        for (const courtKey of Object.keys(week.firstHalf)) {
+            const court = week.firstHalf[courtKey];
+            if (court.teamA) court.teamA.forEach(p => all.add(p));
+            if (court.teamB) court.teamB.forEach(p => all.add(p));
+        }
+        if (week.secondHalf) {
+            for (const courtKey of Object.keys(week.secondHalf)) {
+                const court = week.secondHalf[courtKey];
+                if (court.teamA) court.teamA.forEach(p => all.add(p));
+                if (court.teamB) court.teamB.forEach(p => all.add(p));
+            }
+        }
+    }
+    return [...all];
+}
+
+// Figure out which group's turn it is for the next week
+function getNextWeekNumber(data) {
+    return data.weeks.length + 1;
+}
+
+function getDefaultGroupForWeek(weekNum) {
+    // Odd weeks = Group A, Even weeks = Group B
+    return weekNum % 2 === 1 ? 'A' : 'B';
+}
+
+function getWeekDate(weekNum) {
+    const d = new Date(SEASON_START);
+    d.setDate(d.getDate() + (weekNum - 1) * 7);
+    return d;
+}
+
+function formatDate(d) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+// ==================== ROSTER MANAGEMENT ====================
+function renderRosters() {
+    const data = loadData();
+    renderGroup(data.groupA, 'groupAGrid', 'A');
+    renderGroup(data.groupB, 'groupBGrid', 'B');
+    renderGroup(data.subs, 'subGrid', 'sub');
+}
+
+function renderGroup(players, gridId, group) {
+    const grid = document.getElementById(gridId);
+    if (players.length === 0) {
+        grid.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">No players yet.</div>';
+        return;
+    }
+    grid.innerHTML = players.map((p, i) => `
+        <div class="player-chip">
+            <div class="avatar ${group === 'A' ? 'group-a' : group === 'B' ? 'group-b' : 'sub'}">${getInitials(p)}</div>
+            <span class="name">${p}</span>
+            <span class="remove" onclick="removeRosterPlayer('${group}', ${i})">✕</span>
+        </div>
+    `).join('');
+}
+
+function getInitials(name) {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function addRosterPlayer(group) {
+    const inputId = group === 'A' ? 'newPlayerA' : group === 'B' ? 'newPlayerB' : 'newPlayerSub';
+    const input = document.getElementById(inputId);
+    const name = input.value.trim();
+    if (!name) return;
+
+    const data = loadData();
+    const targetList = group === 'A' ? data.groupA : group === 'B' ? data.groupB : data.subs;
+    const allPlayers = [...data.groupA, ...data.groupB, ...data.subs];
+
+    if (allPlayers.includes(name)) {
+        showToast('Player already exists!');
+        return;
+    }
+    if (group !== 'sub' && targetList.length >= 8) {
+        showToast('Maximum 8 players per group!');
+        return;
+    }
+
+    targetList.push(name);
+    saveData(data);
+    input.value = '';
+    renderRosters();
+    showToast(`${name} added! 🎾`);
+}
+
+function removeRosterPlayer(group, index) {
+    const data = loadData();
+    const targetList = group === 'A' ? data.groupA : group === 'B' ? data.groupB : data.subs;
+    const name = targetList[index];
+    if (data.weeks.length > 0) {
+        if (!confirm(`Remove ${name}? They'll still appear in past match history.`)) return;
+    }
+    targetList.splice(index, 1);
+    saveData(data);
+    renderRosters();
+    showToast(`${name} removed`);
+}
+
+// ==================== NEXT WEEK PLANNER ====================
+function renderNextWeek() {
+    const data = loadData();
+    const weekNum = getNextWeekNumber(data);
+    const weekDate = getWeekDate(weekNum);
+    const defaultGroup = getDefaultGroupForWeek(weekNum);
+    const groupLabel = defaultGroup === 'A' ? '🔵 Group A' : '🟣 Group B';
+    const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
+
+    // If no roster is proposed yet, set the default
+    if (!data.nextWeekRoster) {
+        data.nextWeekRoster = [...defaultPlayers];
+        saveData(data);
+    }
+
+    // Playlist selection
+    const playlists = data.playlists || [];
+    const defaultPlaylistIdx = playlists.length > 0 ? (weekNum - 1) % playlists.length : -1;
+    if (data.nextWeekPlaylistIndex === undefined || data.nextWeekPlaylistIndex === null) {
+        data.nextWeekPlaylistIndex = defaultPlaylistIdx;
+        saveData(data);
+    }
+
+    const info = document.getElementById('nextWeekInfo');
+    let playlistSelectorHtml = '';
+    if (playlists.length > 0) {
+        const selectedIdx = data.nextWeekPlaylistIndex !== null ? data.nextWeekPlaylistIndex : defaultPlaylistIdx;
+        const selectedId = playlists[selectedIdx] ? playlists[selectedIdx].split(':').pop() : '';
+        playlistSelectorHtml = `
+            <div style="margin-bottom: 1rem;">
+                <label style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 0.5rem; color: #1DB954;">
+                    🎵 Week's Playlist
+                </label>
+                <select onchange="updateNextWeekPlaylist(parseInt(this.value))" style="width: 100%; padding: 0.6rem 1rem; margin-bottom: 0.75rem;">
+                    ${playlists.map((uri, i) => {
+                        const sel = i === selectedIdx ? 'selected' : '';
+                        return `<option value="${i}" ${sel}>Playlist #${i + 1} ${i === defaultPlaylistIdx ? '(default rotation)' : ''}</option>`;
+                    }).join('')}
+                </select>
+                ${selectedId ? `<iframe
+                    src="https://open.spotify.com/embed/playlist/${selectedId}?utm_source=generator&theme=0"
+                    height="80"
+                    style="border-radius: 8px; width: 100%; border: none;"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy"></iframe>` : ''}
+            </div>`;
+    }
+
+    info.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+            <span style="font-weight: 700; font-size: 1.1rem;">Week ${weekNum}</span>
+            <span style="color: var(--text-muted);">📆 ${formatDate(weekDate)}</span>
+            <span class="group-indicator group-${defaultGroup.toLowerCase()}">${groupLabel}'s turn</span>
+        </div>
+        <div class="info-box info" style="margin-bottom: 1rem;">
+            The roster below is auto-filled from ${groupLabel}. Swap any player using the dropdowns — great for when someone's ill and needs a sub. You need exactly 8 players to generate matches.
+        </div>
+        ${playlistSelectorHtml}
+    `;
+
+    const roster = data.nextWeekRoster;
+    const allAvailable = [...new Set([...data.groupA, ...data.groupB, ...data.subs])];
+    const rosterDiv = document.getElementById('nextWeekRoster');
+
+    // Build 8 slots
+    let html = '';
+    for (let i = 0; i < 8; i++) {
+        const current = roster[i] || '';
+        const isSub = current && !defaultPlayers.includes(current);
+
+        html += `<div class="roster-slot ${isSub ? 'is-sub' : ''}">
+            <div class="slot-number">${i + 1}</div>
+            <select onchange="updateRosterSlot(${i}, this.value)">
+                <option value="">— empty —</option>`;
+
+        // Group options first (the default group)
+        html += `<optgroup label="${groupLabel}">`;
+        for (const p of defaultPlayers) {
+            const sel = p === current ? 'selected' : '';
+            const inUse = p !== current && roster.includes(p) ? ' (already in)' : '';
+            html += `<option value="${p}" ${sel} ${inUse ? 'disabled' : ''}>${p}${inUse}</option>`;
+        }
+        html += '</optgroup>';
+
+        // Other group + subs
+        const otherGroup = defaultGroup === 'A' ? data.groupB : data.groupA;
+        const otherLabel = defaultGroup === 'A' ? 'Group B' : 'Group A';
+        const subOptions = [...otherGroup, ...data.subs].filter(p => !defaultPlayers.includes(p));
+
+        if (subOptions.length > 0) {
+            html += `<optgroup label="Subs / ${otherLabel}">`;
+            for (const p of subOptions) {
+                const sel = p === current ? 'selected' : '';
+                const inUse = p !== current && roster.includes(p) ? ' (already in)' : '';
+                html += `<option value="${p}" ${sel} ${inUse ? 'disabled' : ''}>${p}${inUse}</option>`;
+            }
+            html += '</optgroup>';
+        }
+
+        html += `</select>
+            <span class="sub-badge">SUB</span>
+        </div>`;
+    }
+
+    const filledCount = roster.filter(p => p && p !== '').length;
+    html += `<div style="margin-top: 0.75rem; font-size: 0.85rem; color: ${filledCount === 8 ? 'var(--green)' : 'var(--red)'};">
+        ${filledCount}/8 players selected ${filledCount === 8 ? '✅' : '— need ' + (8 - filledCount) + ' more'}
+    </div>`;
+
+    rosterDiv.innerHTML = html;
+}
+
+function updateNextWeekPlaylist(index) {
+    const data = loadData();
+    data.nextWeekPlaylistIndex = index;
+    saveData(data);
+    renderNextWeek();
+}
+
+function updateRosterSlot(index, value) {
+    const data = loadData();
+    if (!data.nextWeekRoster) data.nextWeekRoster = [];
+    // Ensure array has 8 slots
+    while (data.nextWeekRoster.length < 8) data.nextWeekRoster.push('');
+    data.nextWeekRoster[index] = value;
+    saveData(data);
+    renderNextWeek();
+}
+
+function resetNextWeekToDefault() {
+    const data = loadData();
+    const weekNum = getNextWeekNumber(data);
+    const defaultGroup = getDefaultGroupForWeek(weekNum);
+    data.nextWeekRoster = [...(defaultGroup === 'A' ? data.groupA : data.groupB)];
+    data.nextWeekPlaylistIndex = null; // reset playlist to default rotation
+    saveData(data);
+    renderNextWeek();
+    showToast('Roster reset to default! 🔄');
+}
+
+function confirmAndGenerate() {
+    const data = loadData();
+    const roster = (data.nextWeekRoster || []).filter(p => p && p !== '');
+
+    if (roster.length !== 8) {
+        showToast(`Need exactly 8 players (have ${roster.length})`);
+        return;
+    }
+
+    if (data.weeks.length >= 20) {
+        showToast('Season complete! 🏆');
+        return;
+    }
+
+    // Use the roster as the active players for this week
+    const pairs = generatePairings(roster, data.pairingHistory);
+    const courts = assignCourts(pairs);
+
+    for (const pair of pairs) {
+        data.pairingHistory.push(pair);
+    }
+
+    const weekNum = data.weeks.length + 1;
+    const weekDate = getWeekDate(weekNum);
+    const defaultGroup = getDefaultGroupForWeek(weekNum);
+    const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
+
+    // Track which players are subs
+    const subNames = roster.filter(p => !defaultPlayers.includes(p));
+
+    const playlists = (data.playlists && data.playlists.length > 0) ? data.playlists : [];
+    const selectedPlaylistIdx = data.nextWeekPlaylistIndex !== undefined && data.nextWeekPlaylistIndex !== null
+        ? data.nextWeekPlaylistIndex
+        : (playlists.length > 0 ? (weekNum - 1) % playlists.length : -1);
+    const playlistUri = playlists.length > 0 && selectedPlaylistIdx >= 0 ? playlists[selectedPlaylistIdx] : null;
+
+    const week = {
+        number: weekNum,
+        date: weekDate.toISOString().split('T')[0],
+        group: defaultGroup,
+        roster: [...roster],
+        subs: subNames,
+        playlistUri: playlistUri,
+        firstHalf: {
+            court1: {
+                teamA: courts.court1.teamA,
+                teamB: courts.court1.teamB,
+                scoreA: null,
+                scoreB: null
+            },
+            court2: {
+                teamA: courts.court2.teamA,
+                teamB: courts.court2.teamB,
+                scoreA: null,
+                scoreB: null
+            }
+        },
+        secondHalf: null,
+        completed: false
+    };
+
+    data.weeks.push(week);
+    data.nextWeekRoster = null; // reset for next time
+    data.nextWeekPlaylistIndex = null; // reset playlist selection for next time
+    saveData(data);
+
+    // Switch to match day view
+    showSection('matchday');
+    populateWeekSelect();
+    document.getElementById('weekSelect').value = weekNum - 1;
+    loadWeek();
+    updateSeasonBar();
+    showToast(`Week ${weekNum} generated! 🎲`);
+}
+
+// ==================== PAIRING ALGORITHM ====================
+function generatePairings(players, pairingHistory) {
+    const pairCount = {};
+    for (const p of players) {
+        for (const q of players) {
+            if (p < q) pairCount[p + '|' + q] = 0;
+        }
+    }
+    for (const [a, b] of pairingHistory) {
+        const key = a < b ? a + '|' + b : b + '|' + a;
+        if (pairCount[key] !== undefined) pairCount[key]++;
+    }
+
+    let bestPairing = null;
+    let bestScore = Infinity;
+
+    function findMatchings(remaining, current) {
+        if (remaining.length === 0) {
+            let score = 0;
+            let maxCount = 0;
+            for (const [a, b] of current) {
+                const key = a < b ? a + '|' + b : b + '|' + a;
+                const count = pairCount[key] || 0;
+                score += count;
+                maxCount = Math.max(maxCount, count);
+            }
+            const totalScore = maxCount * 1000 + score;
+            if (totalScore < bestScore) {
+                bestScore = totalScore;
+                bestPairing = [...current];
+            }
+            return;
+        }
+
+        const first = remaining[0];
+        const rest = remaining.slice(1);
+        for (let i = 0; i < rest.length; i++) {
+            const partner = rest[i];
+            const newRemaining = rest.filter((_, j) => j !== i);
+            current.push([first, partner]);
+            findMatchings(newRemaining, current);
+            current.pop();
+        }
+    }
+
+    findMatchings([...players], []);
+    return bestPairing;
+}
+
+function assignCourts(pairs) {
+    const shuffled = [...pairs].sort(() => Math.random() - 0.5);
+    return {
+        court1: { teamA: shuffled[0], teamB: shuffled[1] },
+        court2: { teamA: shuffled[2], teamB: shuffled[3] }
+    };
+}
+
+// ==================== MATCH DISPLAY ====================
+function loadWeek() {
+    const data = loadData();
+    const select = document.getElementById('weekSelect');
+    const weekIndex = parseInt(select.value);
+    if (isNaN(weekIndex) || !data.weeks[weekIndex]) {
+        document.getElementById('matchDisplay').innerHTML = `
+            <div class="empty-state">
+                <div class="emoji">🎾</div>
+                <p>No matches generated yet.</p>
+                <p>Go to <strong>Next Week</strong> to plan and generate!</p>
+            </div>`;
+        return;
+    }
+
+    const week = data.weeks[weekIndex];
+    let html = '';
+
+    // Week info bar
+    const groupLabel = week.group === 'A' ? '🔵 Group A' : '🟣 Group B';
+    html += `<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <span class="group-indicator group-${(week.group || 'a').toLowerCase()}">${groupLabel}</span>`;
+    if (week.subs && week.subs.length > 0) {
+        html += `<span style="font-size:0.8rem;color:var(--orange);">🟠 Subs: ${week.subs.join(', ')}</span>`;
+    }
+    html += '</div>';
+
+    // First Half
+    html += '<h3>First Half — 45 minutes</h3>';
+    html += '<div class="courts-grid">';
+    html += renderCourt(week.firstHalf.court1, 'Court 1', 'court-1', weekIndex, 'firstHalf', 'court1');
+    html += renderCourt(week.firstHalf.court2, 'Court 2', 'court-2', weekIndex, 'firstHalf', 'court2');
+    html += '</div>';
+
+    // Second Half
+    if (week.secondHalf) {
+        html += '<div class="second-half-header"><h3>⚡ Second Half — Winners vs Winners</h3><p>The battle for glory!</p></div>';
+        html += '<div class="courts-grid">';
+        html += renderCourt(week.secondHalf.winners, '🏆 Winners Court', 'winner-court', weekIndex, 'secondHalf', 'winners');
+        html += renderCourt(week.secondHalf.losers, 'Consolation Court', 'court-2', weekIndex, 'secondHalf', 'losers');
+        html += '</div>';
+    }
+
+    // Action buttons
+    html += '<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;">';
+    if (!week.secondHalf && hasFirstHalfScores(week)) {
+        html += '<button class="btn btn-primary" onclick="setupSecondHalf(' + weekIndex + ')">⚡ Set Up Second Half</button>';
+    }
+    if (week.secondHalf && hasSecondHalfScores(week) && !week.completed) {
+        html += '<button class="btn btn-success" onclick="completeWeek(' + weekIndex + ')">✅ Complete Week</button>';
+    }
+    if (week.completed) {
+        html += '<span style="color: var(--green); font-weight: 600;">✅ Week completed!</span>';
+    }
+    html += '</div>';
+
+    // Spotify
+    if (week.playlistUri) {
+        const playlistId = week.playlistUri.split(':').pop();
+        html += `
+            <div class="spotify-card">
+                <h3>🎵 This Week's Soundtrack</h3>
+                <iframe
+                    src="https://open.spotify.com/embed/playlist/${playlistId}?utm_source=generator&theme=0"
+                    height="152"
+                    frameBorder="0"
+                    allowfullscreen=""
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy">
+                </iframe>
+            </div>`;
+    }
+
+    document.getElementById('matchDisplay').innerHTML = html;
+}
+
+function renderCourt(court, label, cssClass, weekIndex, half, courtKey) {
+    const nameA = court.teamA.join(' & ');
+    const nameB = court.teamB.join(' & ');
+    const scoreA = court.scoreA !== null ? court.scoreA : '';
+    const scoreB = court.scoreB !== null ? court.scoreB : '';
+
+    return `
+        <div class="court-card ${cssClass}">
+            <div class="court-label">${label}</div>
+            <div class="matchup">
+                <div class="team">
+                    <div class="team-names">${nameA}</div>
+                    <input type="number" class="score-input" value="${scoreA}" min="0"
+                        onchange="updateScore(${weekIndex}, '${half}', '${courtKey}', 'scoreA', this.value)">
+                </div>
+                <div class="vs">VS</div>
+                <div class="team">
+                    <div class="team-names">${nameB}</div>
+                    <input type="number" class="score-input" value="${scoreB}" min="0"
+                        onchange="updateScore(${weekIndex}, '${half}', '${courtKey}', 'scoreB', this.value)">
+                </div>
+            </div>
+        </div>`;
+}
+
+function updateScore(weekIndex, half, courtKey, scoreKey, value) {
+    const data = loadData();
+    const val = value === '' ? null : parseInt(value);
+    data.weeks[weekIndex][half][courtKey][scoreKey] = val;
+    saveData(data);
+    loadWeek();
+}
+
+function hasFirstHalfScores(week) {
+    const c1 = week.firstHalf.court1;
+    const c2 = week.firstHalf.court2;
+    return c1.scoreA !== null && c1.scoreB !== null && c2.scoreA !== null && c2.scoreB !== null;
+}
+
+function hasSecondHalfScores(week) {
+    if (!week.secondHalf) return false;
+    const w = week.secondHalf.winners;
+    const l = week.secondHalf.losers;
+    return w.scoreA !== null && w.scoreB !== null && l.scoreA !== null && l.scoreB !== null;
+}
+
+// ==================== SECOND HALF SETUP ====================
+let pendingSecondHalf = null;
+
+function setupSecondHalf(weekIndex) {
+    const data = loadData();
+    const week = data.weeks[weekIndex];
+    const c1 = week.firstHalf.court1;
+    const c2 = week.firstHalf.court2;
+
+    let winner1, loser1, winner2, loser2;
+
+    if (c1.scoreA > c1.scoreB) {
+        winner1 = c1.teamA; loser1 = c1.teamB;
+    } else if (c1.scoreB > c1.scoreA) {
+        winner1 = c1.teamB; loser1 = c1.teamA;
+    } else {
+        pendingSecondHalf = { weekIndex, tiedCourt: 1, teamA: c1.teamA, teamB: c1.teamB };
+        showCoinToss(c1.teamA, c1.teamB, 'Court 1');
+        return;
+    }
+
+    if (c2.scoreA > c2.scoreB) {
+        winner2 = c2.teamA; loser2 = c2.teamB;
+    } else if (c2.scoreB > c2.scoreA) {
+        winner2 = c2.teamB; loser2 = c2.teamA;
+    } else {
+        pendingSecondHalf = { weekIndex, tiedCourt: 2, winner1, loser1, teamA: c2.teamA, teamB: c2.teamB };
+        showCoinToss(c2.teamA, c2.teamB, 'Court 2');
+        return;
+    }
+
+    createSecondHalf(weekIndex, winner1, loser1, winner2, loser2);
+}
+
+function showCoinToss(teamA, teamB, courtLabel) {
+    document.getElementById('coinModalText').textContent =
+        `${courtLabel}: ${teamA.join(' & ')} vs ${teamB.join(' & ')} ended in a tie! Who wins the coin toss?`;
+    document.getElementById('coinTeamA').textContent = teamA.join(' & ');
+    document.getElementById('coinTeamB').textContent = teamB.join(' & ');
+    document.getElementById('coinModal').classList.add('show');
+}
+
+function resolveCoinToss(choice) {
+    document.getElementById('coinModal').classList.remove('show');
+    const p = pendingSecondHalf;
+    const data = loadData();
+    const week = data.weeks[p.weekIndex];
+
+    if (p.tiedCourt === 1) {
+        const winner1 = choice === 'A' ? p.teamA : p.teamB;
+        const loser1 = choice === 'A' ? p.teamB : p.teamA;
+
+        const c2 = week.firstHalf.court2;
+        if (c2.scoreA > c2.scoreB) {
+            createSecondHalf(p.weekIndex, winner1, loser1, c2.teamA, c2.teamB);
+        } else if (c2.scoreB > c2.scoreA) {
+            createSecondHalf(p.weekIndex, winner1, loser1, c2.teamB, c2.teamA);
+        } else {
+            pendingSecondHalf = { weekIndex: p.weekIndex, tiedCourt: 2, winner1, loser1, teamA: c2.teamA, teamB: c2.teamB };
+            showCoinToss(c2.teamA, c2.teamB, 'Court 2');
+        }
+    } else {
+        const winner2 = choice === 'A' ? p.teamA : p.teamB;
+        const loser2 = choice === 'A' ? p.teamB : p.teamA;
+        createSecondHalf(p.weekIndex, p.winner1, p.loser1, winner2, loser2);
+    }
+}
+
+function createSecondHalf(weekIndex, winner1, loser1, winner2, loser2) {
+    const data = loadData();
+    data.weeks[weekIndex].secondHalf = {
+        winners: { teamA: winner1, teamB: winner2, scoreA: null, scoreB: null },
+        losers: { teamA: loser1, teamB: loser2, scoreA: null, scoreB: null }
+    };
+    saveData(data);
+    loadWeek();
+    showToast('Second half set up! ⚡');
+}
+
+// ==================== COMPLETE WEEK ====================
+function completeWeek(weekIndex) {
+    const data = loadData();
+    data.weeks[weekIndex].completed = true;
+    saveData(data);
+    loadWeek();
+    updateLeaderboard();
+    showToast('Week completed! 🎉');
+}
+
+// ==================== LEADERBOARD ====================
+function updateLeaderboard() {
+    const data = loadData();
+    const allPlayers = getAllPlayers(data);
+    const scores = {};
+
+    for (const p of allPlayers) {
+        scores[p] = { games: 0, weeksPlayed: 0 };
+    }
+
+    for (const week of data.weeks) {
+        if (!week.completed) continue;
+
+        const weekPlayers = new Set();
+        const halves = [week.firstHalf];
+        if (week.secondHalf) halves.push(week.secondHalf);
+
+        for (const half of halves) {
+            for (const courtKey of Object.keys(half)) {
+                const court = half[courtKey];
+                if (court.scoreA !== null) {
+                    for (const p of court.teamA) {
+                        if (!scores[p]) scores[p] = { games: 0, weeksPlayed: 0 };
+                        scores[p].games += court.scoreA;
+                        weekPlayers.add(p);
+                    }
+                }
+                if (court.scoreB !== null) {
+                    for (const p of court.teamB) {
+                        if (!scores[p]) scores[p] = { games: 0, weeksPlayed: 0 };
+                        scores[p].games += court.scoreB;
+                        weekPlayers.add(p);
+                    }
+                }
+            }
+        }
+
+        for (const p of weekPlayers) {
+            scores[p].weeksPlayed++;
+        }
+    }
+
+    const sorted = Object.entries(scores)
+        .map(([name, s]) => ({ name, ...s }))
+        .filter(p => p.weeksPlayed > 0)
+        .sort((a, b) => b.games - a.games);
+
+    const maxGames = sorted.length > 0 ? sorted[0].games : 1;
+    const completedWeeks = data.weeks.filter(w => w.completed).length;
+
+    if (sorted.length === 0 || completedWeeks === 0) {
+        document.getElementById('leaderboardContent').innerHTML = `
+            <div class="empty-state"><div class="emoji">📊</div><p>No scores recorded yet.</p></div>`;
+        return;
+    }
+
+    let html = `<table class="leaderboard-table">
+        <thead><tr>
+            <th>#</th><th>Player</th><th>Games Won</th><th>Weeks</th><th></th>
+        </tr></thead><tbody>`;
+
+    sorted.forEach((p, i) => {
+        const rankClass = i < 3 ? `rank-${i + 1}` : '';
+        const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+        const pct = maxGames > 0 ? (p.games / maxGames * 100) : 0;
+        // Show which group they belong to
+        const inA = data.groupA.includes(p.name);
+        const inB = data.groupB.includes(p.name);
+        const groupTag = inA && inB ? 'A+B' : inA ? 'A' : inB ? 'B' : 'Sub';
+        html += `<tr>
+            <td><span class="rank ${rankClass}">${medal || (i + 1)}</span></td>
+            <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${groupTag}</span></td>
+            <td>
+                ${p.games}
+                <div class="games-bar"><div class="games-bar-fill" style="width:${pct}%"></div></div>
+            </td>
+            <td>${p.weeksPlayed}</td>
+            <td style="font-size:0.8rem;color:var(--text-muted)">${p.weeksPlayed > 0 ? (p.games / p.weeksPlayed).toFixed(1) + '/wk' : '-'}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('leaderboardContent').innerHTML = html;
+}
+
+// ==================== HISTORY ====================
+function updateHistory() {
+    const data = loadData();
+    const completed = data.weeks.filter(w => w.completed).reverse();
+
+    if (completed.length === 0) {
+        document.getElementById('historyContent').innerHTML = `
+            <div class="empty-state"><div class="emoji">📚</div><p>No completed weeks yet.</p></div>`;
+        return;
+    }
+
+    let html = '';
+    for (const week of completed) {
+        const groupLabel = week.group === 'A' ? '🔵 A' : '🟣 B';
+        const subsInfo = week.subs && week.subs.length > 0 ? ` • Subs: ${week.subs.join(', ')}` : '';
+        html += `<div class="week-history">
+            <div class="week-history-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                <span>Week ${week.number} — ${week.date} ${groupLabel}${subsInfo}</span>
+                <span>▼</span>
+            </div>
+            <div class="week-history-body">`;
+
+        html += '<h3 style="margin-bottom:0.5rem">First Half</h3>';
+        html += renderHistoryMatch(week.firstHalf.court1, 'Court 1');
+        html += renderHistoryMatch(week.firstHalf.court2, 'Court 2');
+
+        if (week.secondHalf) {
+            html += '<h3 style="margin:0.75rem 0 0.5rem">Second Half</h3>';
+            html += renderHistoryMatch(week.secondHalf.winners, '🏆 Winners');
+            html += renderHistoryMatch(week.secondHalf.losers, 'Consolation');
+        }
+
+        html += '</div></div>';
+    }
+
+    document.getElementById('historyContent').innerHTML = html;
+}
+
+function renderHistoryMatch(court, label) {
+    const winner = court.scoreA > court.scoreB ? 'A' : court.scoreB > court.scoreA ? 'B' : 'tie';
+    const nameA = court.teamA.join(' & ');
+    const nameB = court.teamB.join(' & ');
+    return `<div class="history-match">
+        <span style="color:var(--text-muted);width:100px;font-size:0.8rem">${label}</span>
+        <span style="font-weight:${winner === 'A' ? '700' : '400'}">${nameA}</span>
+        <span style="font-weight:700;color:var(--accent);margin:0 0.5rem">${court.scoreA} – ${court.scoreB}</span>
+        <span style="font-weight:${winner === 'B' ? '700' : '400'}">${nameB}</span>
+    </div>`;
+}
+
+// ==================== UI HELPERS ====================
+function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    if (id === 'leaderboard') updateLeaderboard();
+    if (id === 'history') updateHistory();
+    if (id === 'nextweek') renderNextWeek();
+    if (id === 'players') renderRosters();
+}
+
+function populateWeekSelect() {
+    const data = loadData();
+    const select = document.getElementById('weekSelect');
+    select.innerHTML = '';
+    if (data.weeks.length === 0) {
+        select.innerHTML = '<option value="">No weeks yet</option>';
+        return;
+    }
+    data.weeks.forEach((w, i) => {
+        const status = w.completed ? '✅' : '⏳';
+        const groupTag = w.group === 'A' ? '🔵' : '🟣';
+        select.innerHTML += `<option value="${i}">${status} ${groupTag} Week ${w.number} — ${w.date}</option>`;
+    });
+    select.value = data.weeks.length - 1;
+}
+
+function updateSeasonBar() {
+    const data = loadData();
+    const completed = data.weeks.filter(w => w.completed).length;
+    const total = data.weeks.length;
+    document.getElementById('seasonWeekLabel').textContent = `Week ${total} / 20`;
+    document.getElementById('seasonProgressFill').style.width = (completed / 20 * 100) + '%';
+    document.getElementById('seasonWeeksLeft').textContent = `${20 - total} weeks left`;
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function resetSeason() {
+    if (!confirm('⚠️ This will delete ALL data including players, scores, and history. Are you sure?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    init();
+    showToast('Season reset! 🔄');
+}
+
+function exportData() {
+    const data = loadData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'padel-tuesdays-backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Data exported! 📤');
+}
+
+function importData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                saveData(data);
+                init();
+                showToast('Data imported! 📥');
+            } catch {
+                showToast('Invalid file!');
+            }
+        };
+        reader.readAsText(e.target.files[0]);
+    };
+    input.click();
+}
+
+// ==================== PLAYLIST MANAGEMENT ====================
+function parsePlaylistUri(input) {
+    const urlMatch = input.match(/playlist\/([a-zA-Z0-9]+)/);
+    if (urlMatch) return 'spotify:playlist:' + urlMatch[1];
+    if (input.startsWith('spotify:playlist:')) return input;
+    return null;
+}
+
+function addPlaylist() {
+    const input = document.getElementById('newPlaylistUri');
+    const uri = parsePlaylistUri(input.value.trim());
+    if (!uri) {
+        showToast('Invalid playlist link!');
+        return;
+    }
+    const data = loadData();
+    if (!data.playlists) data.playlists = [];
+    if (data.playlists.includes(uri)) {
+        showToast('Playlist already added!');
+        return;
+    }
+    data.playlists.push(uri);
+    saveData(data);
+    input.value = '';
+    renderPlaylists();
+    showToast('Playlist added! 🎵');
+}
+
+function removePlaylist(index) {
+    const data = loadData();
+    data.playlists.splice(index, 1);
+    saveData(data);
+    renderPlaylists();
+    showToast('Playlist removed');
+}
+
+function renderPlaylists() {
+    const data = loadData();
+    const grid = document.getElementById('playlistGrid');
+    if (!data.playlists || data.playlists.length === 0) {
+        grid.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No playlists added yet.</p>';
+        return;
+    }
+    grid.innerHTML = data.playlists.map((uri, i) => {
+        const playlistId = uri.split(':').pop();
+        return `
+            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                <span style="color: var(--accent); font-weight: 700; font-size: 0.8rem; min-width: 24px;">#${i + 1}</span>
+                <iframe
+                    src="https://open.spotify.com/embed/playlist/${playlistId}?utm_source=generator&theme=0"
+                    height="80"
+                    style="border-radius: 8px; flex: 1; border: none;"
+                    allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                    loading="lazy">
+                </iframe>
+                <span class="remove" onclick="removePlaylist(${i})" style="cursor:pointer; color: var(--text-muted); font-size: 1.1rem;">✕</span>
+            </div>`;
+    }).join('');
+}
+
+// ==================== INIT ====================
+const DEFAULT_PLAYLISTS = [
+    'spotify:playlist:2akGcecFZy9bx3Clvei53L',
+    'spotify:playlist:6hu8d3wjCRuJIYH1yZ2wCS',
+    'spotify:playlist:2y7DeotmDFILmoELjQKiz3',
+    'spotify:playlist:5EI3i3rAtBOZHh8uEFWlSh',
+    'spotify:playlist:0lMLk1EX0NElqT4U3n6bzC',
+    'spotify:playlist:6mWWxcedvw8wdEnlYUk36P',
+    'spotify:playlist:5tDfhOzqHXMsksI15lIL88',
+    'spotify:playlist:3MzgLDEjzSAok9of42uvPM',
+    'spotify:playlist:0zqrq6pMAXwdIYkxujmU0S',
+    'spotify:playlist:6AySIqy8RMKjtSeNfBxs2Q',
+];
+
+const DEFAULT_GROUP_A = ['Louise', 'Ullis', 'Ida', 'Cecilia', 'Gabbi', 'Sara B', 'Amelie', 'Anna'];
+const DEFAULT_GROUP_B = ['Monica', 'Sara C', 'Ida', 'Cecilia', 'Gabbi', 'Sara B', 'Amelie', 'Anna'];
+
+function init() {
+    const data = loadData();
+
+    // Pre-seed rosters if empty
+    if (data.groupA.length === 0 && data.groupB.length === 0) {
+        data.groupA = [...DEFAULT_GROUP_A];
+        data.groupB = [...DEFAULT_GROUP_B];
+        data.subs = [];
+    }
+
+    // Pre-seed playlists if empty
+    if (!data.playlists || data.playlists.length === 0) {
+        data.playlists = [...DEFAULT_PLAYLISTS];
+    }
+
+    saveData(data);
+
+    renderRosters();
+    renderPlaylists();
+    populateWeekSelect();
+    loadWeek();
+    updateSeasonBar();
+    updateLeaderboard();
+}
+
+init();
+</script>
+
+</body>
+</html>
