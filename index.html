@@ -1546,10 +1546,13 @@ function confirmAndGenerate() {
 
 // ==================== PAIRING ALGORITHM ====================
 function generatePairings(players, pairingHistory) {
+    // Shuffle players first for randomness — ensures different results each time
+    const shuffled = [...players].sort(() => Math.random() - 0.5);
+
     // Build pair count map for this week's players
     const pairCount = {};
-    for (const p of players) {
-        for (const q of players) {
+    for (const p of shuffled) {
+        for (const q of shuffled) {
             if (p < q) pairCount[p + '|' + q] = 0;
         }
     }
@@ -1570,9 +1573,9 @@ function generatePairings(players, pairingHistory) {
     // so pairing them is unfair.
 
     const playerMin = {};
-    for (const p of players) {
+    for (const p of shuffled) {
         let min = Infinity;
-        for (const q of players) {
+        for (const q of shuffled) {
             if (p === q) continue;
             const key = p < q ? p + '|' + q : q + '|' + p;
             min = Math.min(min, pairCount[key] || 0);
@@ -1580,7 +1583,8 @@ function generatePairings(players, pairingHistory) {
         playerMin[p] = min;
     }
 
-    let bestPairing = null;
+    // Collect ALL optimal pairings (tied for best score), then pick one randomly
+    let bestPairings = [];
     let bestScore = Infinity;
 
     function scorePairing(pairs) {
@@ -1612,7 +1616,9 @@ function generatePairings(players, pairingHistory) {
             const score = scorePairing(current);
             if (score < bestScore) {
                 bestScore = score;
-                bestPairing = [...current];
+                bestPairings = [[...current]];
+            } else if (score === bestScore) {
+                bestPairings.push([...current]);
             }
             return;
         }
@@ -1621,10 +1627,11 @@ function generatePairings(players, pairingHistory) {
         const rest = remaining.slice(1);
 
         // Sort candidates: prefer partners this player has played with least
+        // Add random tiebreaker so same-count partners aren't always in the same order
         const candidates = rest.map((partner, i) => {
             const key = first < partner ? first + '|' + partner : partner + '|' + first;
-            return { partner, i, count: pairCount[key] || 0 };
-        }).sort((a, b) => a.count - b.count);
+            return { partner, i, count: pairCount[key] || 0, rand: Math.random() };
+        }).sort((a, b) => a.count - b.count || a.rand - b.rand);
 
         for (const { partner, i } of candidates) {
             const newRemaining = rest.filter((_, j) => j !== i);
@@ -1634,8 +1641,10 @@ function generatePairings(players, pairingHistory) {
         }
     }
 
-    findMatchings([...players], []);
-    return bestPairing;
+    findMatchings(shuffled, []);
+
+    // Pick a random optimal pairing
+    return bestPairings[Math.floor(Math.random() * bestPairings.length)];
 }
 
 function assignCourts(pairs) {
