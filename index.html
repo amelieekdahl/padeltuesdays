@@ -1348,14 +1348,26 @@ function renderNextWeek() {
         }
         html += '</optgroup>';
 
-        // Other group + subs
+        // Other group players (not already in the default group)
         const otherGroup = defaultGroup === 'A' ? data.groupB : data.groupA;
         const otherLabel = defaultGroup === 'A' ? 'Group B' : 'Group A';
-        const subOptions = [...otherGroup, ...data.subs].filter(p => !defaultPlayers.includes(p));
+        const otherGroupOnly = [...new Set(otherGroup)].filter(p => !defaultPlayers.includes(p));
 
-        if (subOptions.length > 0) {
-            html += `<optgroup label="Subs / ${otherLabel}">`;
-            for (const p of subOptions) {
+        if (otherGroupOnly.length > 0) {
+            html += `<optgroup label="${otherLabel}">`;
+            for (const p of otherGroupOnly) {
+                const sel = p === current ? 'selected' : '';
+                const inUse = p !== current && roster.includes(p) ? ' (already in)' : '';
+                html += `<option value="${p}" ${sel} ${inUse ? 'disabled' : ''}>${p}${inUse}</option>`;
+            }
+            html += '</optgroup>';
+        }
+
+        // Subs
+        const subOnly = data.subs.filter(p => !defaultPlayers.includes(p) && !otherGroupOnly.includes(p));
+        if (subOnly.length > 0) {
+            html += `<optgroup label="Subs">`;
+            for (const p of subOnly) {
                 const sel = p === current ? 'selected' : '';
                 const inUse = p !== current && roster.includes(p) ? ' (already in)' : '';
                 html += `<option value="${p}" ${sel} ${inUse ? 'disabled' : ''}>${p}${inUse}</option>`;
