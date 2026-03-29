@@ -874,6 +874,7 @@
     <div class="header-bg-overlay"></div>
     <h1>🏆 Padel <span>Tuesdays</span></h1>
     <p>Season 2026 • Rotating Rosters • 20 Weeks • 1 Champion</p>
+    <div id="syncIndicator" style="position:relative;z-index:2;margin-top:0.5rem;font-size:0.75rem;font-weight:500;min-height:1.2em;"></div>
 </div>
 
 <div class="nav">
@@ -1120,28 +1121,64 @@ function loadData() {
     return JSON.parse(JSON.stringify(DEFAULT_DATA));
 }
 
+let _saveQueue = null;  // pending save data
+let _saving = false;    // is a save in progress?
+
 function saveData(data) {
     // Save to localStorage immediately (fast)
     _cachedData = data;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    // Also save to Google Sheets (async, for shared persistence)
-    saveToCloud(data);
+    // Queue cloud save (debounced, with retry)
+    _saveQueue = data;
+    if (!_saving) _flushSave();
 }
 
-async function saveToCloud(data) {
-    try {
-        await fetch(SHEETS_API, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(data)
-        });
-    } catch (e) {
-        console.warn('Cloud save failed, data is still in localStorage:', e);
+async function _flushSave() {
+    if (!_saveQueue) return;
+    _saving = true;
+    updateSyncIndicator('saving');
+
+    const dataToSave = _saveQueue;
+    _saveQueue = null;
+
+    let success = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            // Use no-cors POST — Google Apps Script redirects make cors mode fail,
+            // but no-cors POST bodies are still received by the server
+            await fetch(SHEETS_API, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify(dataToSave)
+            });
+
+            // Verify the save by reading back from cloud
+            const verify = await fetch(SHEETS_API);
+            const cloudData = await verify.json();
+            if (cloudData && cloudData.weeks !== undefined &&
+                JSON.stringify(cloudData.weeks) === JSON.stringify(dataToSave.weeks)) {
+                success = true;
+                break;
+            } else {
+                console.warn(`Cloud save verify failed (attempt ${attempt + 1}), retrying...`);
+                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            }
+        } catch (e) {
+            console.warn(`Cloud save failed (attempt ${attempt + 1}):`, e);
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
     }
+
+    _saving = false;
+    updateSyncIndicator(success ? 'saved' : 'error');
+
+    // If there's a new save queued while we were saving, flush it
+    if (_saveQueue) _flushSave();
 }
 
 async function loadFromCloud() {
+    updateSyncIndicator('loading');
     try {
         const res = await fetch(SHEETS_API);
         const data = await res.json();
@@ -1149,13 +1186,36 @@ async function loadFromCloud() {
             _cachedData = data;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             _dataLoaded = true;
+            updateSyncIndicator('saved');
             return data;
         }
     } catch (e) {
         console.warn('Cloud load failed, using localStorage:', e);
     }
     _dataLoaded = true;
+    updateSyncIndicator('offline');
     return loadData();
+}
+
+function updateSyncIndicator(state) {
+    let el = document.getElementById('syncIndicator');
+    if (!el) return;
+    const states = {
+        loading: { icon: '☁️', text: 'Loading...', color: 'var(--blue)' },
+        saving:  { icon: '💾', text: 'Saving...', color: 'var(--accent)' },
+        saved:   { icon: '✅', text: 'Synced', color: 'var(--green)' },
+        error:   { icon: '⚠️', text: 'Sync failed — retrying', color: 'var(--red)' },
+        offline: { icon: '📴', text: 'Offline — local only', color: 'var(--orange)' }
+    };
+    const s = states[state] || states.saved;
+    el.innerHTML = `<span style="color:${s.color}">${s.icon} ${s.text}</span>`;
+
+    // Auto-hide "Synced" after 3 seconds
+    if (state === 'saved') {
+        setTimeout(() => {
+            if (el.textContent.includes('Synced')) el.innerHTML = '';
+        }, 3000);
+    }
 }
 
 // Load from cloud on page load

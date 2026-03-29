@@ -125,7 +125,22 @@ function doGet(e) {
     return ContentService.createTextOutput('{}')
       .setMimeType(ContentService.MimeType.JSON);
   }
-  const raw = sheet.getRange(1, 1).getValue();
+  
+  // Check if data is chunked across multiple cells
+  let raw = '';
+  if (lastRow >= 2) {
+    const meta = sheet.getRange(2, 1).getValue();
+    if (typeof meta === 'string' && meta.startsWith('chunks:')) {
+      const numChunks = parseInt(meta.split(':')[1]);
+      const chunks = sheet.getRange(1, 1, 1, numChunks).getValues()[0];
+      raw = chunks.join('');
+    } else {
+      raw = sheet.getRange(1, 1).getValue();
+    }
+  } else {
+    raw = sheet.getRange(1, 1).getValue();
+  }
+  
   return ContentService.createTextOutput(raw)
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -164,9 +179,27 @@ function doPost(e) {
   }
 
   // --- Default: save tournament data (existing behaviour) ---
+  // Google Sheets has a 50,000 character cell limit.
+  // If data is too large for one cell, split across multiple cells.
   const sheet = getOrCreateSheet('Data');
   sheet.clear();
-  sheet.getRange(1, 1).setValue(body);
+  
+  // Split body into 40KB chunks to stay within cell limits
+  const CHUNK_SIZE = 40000;
+  if (body.length <= CHUNK_SIZE) {
+    sheet.getRange(1, 1).setValue(body);
+  } else {
+    const chunks = [];
+    for (let i = 0; i < body.length; i += CHUNK_SIZE) {
+      chunks.push(body.substring(i, i + CHUNK_SIZE));
+    }
+    for (let i = 0; i < chunks.length; i++) {
+      sheet.getRange(1, i + 1).setValue(chunks[i]);
+    }
+    // Mark how many chunks in a metadata row
+    sheet.getRange(2, 1).setValue('chunks:' + chunks.length);
+  }
+  
   return ContentService.createTextOutput(JSON.stringify({ ok: true }))
     .setMimeType(ContentService.MimeType.JSON);
 }
