@@ -1679,6 +1679,9 @@ function loadWeek() {
 
     // Action buttons
     html += '<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;">';
+    if (!week.completed && !week.secondHalf) {
+        html += '<button class="btn btn-secondary" onclick="reshufflePairs(' + weekIndex + ')">🔀 Re-shuffle Pairs</button>';
+    }
     if (!week.secondHalf && hasFirstHalfScores(week)) {
         html += '<button class="btn btn-primary" onclick="setupSecondHalf(' + weekIndex + ')">⚡ Set Up Second Half</button>';
     }
@@ -1742,6 +1745,45 @@ function updateScore(weekIndex, half, courtKey, scoreKey, value) {
     data.weeks[weekIndex][half][courtKey][scoreKey] = val;
     saveData(data);
     loadWeek();
+}
+
+function reshufflePairs(weekIndex) {
+    const data = loadData();
+    const week = data.weeks[weekIndex];
+
+    // Remove old pairings from history
+    removePairingsForWeek(data, week);
+
+    // Generate new pairings from the same roster
+    const roster = week.roster;
+    const pairs = generatePairings(roster, data.pairingHistory);
+    const courts = assignCourts(pairs);
+
+    // Add new pairings to history
+    for (const pair of pairs) {
+        data.pairingHistory.push(pair);
+    }
+
+    // Update the week's first half with new pairs, reset scores
+    week.firstHalf = {
+        court1: {
+            teamA: courts.court1.teamA,
+            teamB: courts.court1.teamB,
+            scoreA: null,
+            scoreB: null
+        },
+        court2: {
+            teamA: courts.court2.teamA,
+            teamB: courts.court2.teamB,
+            scoreA: null,
+            scoreB: null
+        }
+    };
+    week.secondHalf = null;
+
+    saveData(data);
+    loadWeek();
+    showToast('New pairs generated! 🔀');
 }
 
 function hasFirstHalfScores(week) {
