@@ -1076,6 +1076,18 @@
     </div>
 </div>
 
+<!-- Swap Players Modal -->
+<div class="modal-overlay" id="swapModal">
+    <div class="modal" style="max-width:480px;text-align:left;">
+        <h3 style="margin-bottom:0.5rem;">🔀 Swap Players</h3>
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem;">Pick two players to swap between teams. This re-pairs them while keeping everyone on the same court.</p>
+        <div id="swapModalBody"></div>
+        <div class="modal-buttons" style="margin-top:1rem;">
+            <button class="btn btn-secondary" onclick="closeSwapModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1679,9 +1691,6 @@ function loadWeek() {
 
     // Action buttons
     html += '<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;">';
-    if (!week.completed && !week.secondHalf) {
-        html += '<button class="btn btn-secondary" onclick="reshufflePairs(' + weekIndex + ')">🔀 Re-shuffle Pairs</button>';
-    }
     if (!week.secondHalf && hasFirstHalfScores(week)) {
         html += '<button class="btn btn-primary" onclick="setupSecondHalf(' + weekIndex + ')">⚡ Set Up Second Half</button>';
     }
@@ -1715,14 +1724,20 @@ function loadWeek() {
 }
 
 function renderCourt(court, label, cssClass, weekIndex, half, courtKey) {
+    const data = loadData();
+    const week = data.weeks[weekIndex];
     const nameA = court.teamA.join(' & ');
     const nameB = court.teamB.join(' & ');
     const scoreA = court.scoreA !== null ? court.scoreA : '';
     const scoreB = court.scoreB !== null ? court.scoreB : '';
+    const canShuffle = !week.completed && half === 'firstHalf' && !week.secondHalf;
 
     return `
         <div class="court-card ${cssClass}">
-            <div class="court-label">${label}</div>
+            <div class="court-label" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>${label}</span>
+                ${canShuffle ? `<button class="btn btn-secondary" style="padding:0.15rem 0.5rem;font-size:0.7rem;" onclick="showSwapModal(${weekIndex}, '${courtKey}')" title="Re-pair players on this court">🔀 Swap</button>` : ''}
+            </div>
             <div class="matchup">
                 <div class="team">
                     <div class="team-names">${nameA}</div>
@@ -1747,43 +1762,152 @@ function updateScore(weekIndex, half, courtKey, scoreKey, value) {
     loadWeek();
 }
 
-function reshufflePairs(weekIndex) {
+// ==================== SWAP PLAYERS ====================
+let swapState = { weekIndex: null, courtKey: null };
+
+function showSwapModal(weekIndex, courtKey) {
     const data = loadData();
     const week = data.weeks[weekIndex];
+    const court = week.firstHalf[courtKey];
+    const otherCourtKey = courtKey === 'court1' ? 'court2' : 'court1';
+    const otherCourt = week.firstHalf[otherCourtKey];
 
-    // Remove old pairings from history
-    removePairingsForWeek(data, week);
+    swapState = { weekIndex, courtKey };
 
-    // Generate new pairings from the same roster
-    const roster = week.roster;
-    const pairs = generatePairings(roster, data.pairingHistory);
-    const courts = assignCourts(pairs);
+    // All 8 players across both courts
+    const allPlayers = [...court.teamA, ...court.teamB, ...otherCourt.teamA, ...otherCourt.teamB];
 
-    // Add new pairings to history
-    for (const pair of pairs) {
-        data.pairingHistory.push(pair);
+    // Build swap options: pick any player from this court to swap with any player from either court
+    const courtLabel = courtKey === 'court1' ? 'Court 1' : 'Court 2';
+    const otherLabel = courtKey === 'court1' ? 'Court 2' : 'Court 1';
+    const thisCourtPlayers = [...court.teamA, ...court.teamB];
+    const otherCourtPlayers = [...otherCourt.teamA, ...otherCourt.teamB];
+
+    let html = `
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.4rem;">Player from ${courtLabel}:</label>
+            <select id="swapPlayerA" style="width:100%;" onchange="updateSwapPreview()">
+                ${thisCourtPlayers.map(p => `<option value="${p}">${p}</option>`).join('')}
+            </select>
+        </div>
+        <div style="text-align:center;font-size:1.2rem;margin:0.5rem 0;">🔄</div>
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:0.4rem;">Swap with:</label>
+            <select id="swapPlayerB" style="width:100%;" onchange="updateSwapPreview()">
+                <optgroup label="Same court (${courtLabel}) — re-pair">
+                    ${thisCourtPlayers.map(p => `<option value="${p}">${p}</option>`).join('')}
+                </optgroup>
+                <optgroup label="Other court (${otherLabel}) — swap across">
+                    ${otherCourtPlayers.map(p => `<option value="${p}">${p}</option>`).join('')}
+                </optgroup>
+            </select>
+        </div>
+        <div id="swapPreview" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem;font-size:0.85rem;"></div>
+        <div style="margin-top:1rem;text-align:right;">
+            <button class="btn btn-primary" onclick="executeSwap()">✅ Confirm Swap</button>
+        </div>
+    `;
+
+    document.getElementById('swapModalBody').innerHTML = html;
+
+    // Set second dropdown to a different player by default
+    const selectB = document.getElementById('swapPlayerB');
+    if (thisCourtPlayers.length > 1) {
+        selectB.value = thisCourtPlayers[1]; // pick the teammate by default
     }
 
-    // Update the week's first half with new pairs, reset scores
-    week.firstHalf = {
-        court1: {
-            teamA: courts.court1.teamA,
-            teamB: courts.court1.teamB,
-            scoreA: null,
-            scoreB: null
-        },
-        court2: {
-            teamA: courts.court2.teamA,
-            teamB: courts.court2.teamB,
-            scoreA: null,
-            scoreB: null
-        }
+    updateSwapPreview();
+    document.getElementById('swapModal').classList.add('show');
+}
+
+function closeSwapModal() {
+    document.getElementById('swapModal').classList.remove('show');
+}
+
+function updateSwapPreview() {
+    const playerA = document.getElementById('swapPlayerA').value;
+    const playerB = document.getElementById('swapPlayerB').value;
+    const preview = document.getElementById('swapPreview');
+
+    if (playerA === playerB) {
+        preview.innerHTML = '<span style="color:var(--text-muted);">Pick two different players to swap.</span>';
+        return;
+    }
+
+    const data = loadData();
+    const week = data.weeks[swapState.weekIndex];
+    const result = computeSwap(week, playerA, playerB);
+
+    preview.innerHTML = `
+        <div style="font-weight:600;margin-bottom:0.5rem;color:var(--accent);">After swap:</div>
+        <div style="margin-bottom:0.4rem;"><strong>Court 1:</strong> ${result.court1.teamA.join(' & ')} vs ${result.court1.teamB.join(' & ')}</div>
+        <div><strong>Court 2:</strong> ${result.court2.teamA.join(' & ')} vs ${result.court2.teamB.join(' & ')}</div>
+    `;
+}
+
+function computeSwap(week, playerA, playerB) {
+    // Clone all 4 teams
+    const c1tA = [...week.firstHalf.court1.teamA];
+    const c1tB = [...week.firstHalf.court1.teamB];
+    const c2tA = [...week.firstHalf.court2.teamA];
+    const c2tB = [...week.firstHalf.court2.teamB];
+
+    const teams = [c1tA, c1tB, c2tA, c2tB];
+
+    // Find which teams playerA and playerB are in
+    let teamIdxA = -1, posA = -1, teamIdxB = -1, posB = -1;
+    for (let t = 0; t < teams.length; t++) {
+        const iA = teams[t].indexOf(playerA);
+        if (iA !== -1) { teamIdxA = t; posA = iA; }
+        const iB = teams[t].indexOf(playerB);
+        if (iB !== -1) { teamIdxB = t; posB = iB; }
+    }
+
+    // Swap
+    teams[teamIdxA][posA] = playerB;
+    teams[teamIdxB][posB] = playerA;
+
+    return {
+        court1: { teamA: teams[0], teamB: teams[1] },
+        court2: { teamA: teams[2], teamB: teams[3] }
     };
+}
+
+function executeSwap() {
+    const playerA = document.getElementById('swapPlayerA').value;
+    const playerB = document.getElementById('swapPlayerB').value;
+
+    if (playerA === playerB) {
+        showToast('Pick two different players!');
+        return;
+    }
+
+    const data = loadData();
+    const week = data.weeks[swapState.weekIndex];
+
+    // Remove old pairings
+    removePairingsForWeek(data, week);
+
+    const result = computeSwap(week, playerA, playerB);
+
+    // Update first half with swapped teams, reset scores
+    week.firstHalf.court1.teamA = result.court1.teamA;
+    week.firstHalf.court1.teamB = result.court1.teamB;
+    week.firstHalf.court1.scoreA = null;
+    week.firstHalf.court1.scoreB = null;
+    week.firstHalf.court2.teamA = result.court2.teamA;
+    week.firstHalf.court2.teamB = result.court2.teamB;
+    week.firstHalf.court2.scoreA = null;
+    week.firstHalf.court2.scoreB = null;
     week.secondHalf = null;
 
+    // Add new pairings
+    addPairingsForWeek(data, week);
+
     saveData(data);
+    closeSwapModal();
     loadWeek();
-    showToast('New pairs generated! 🔀');
+    showToast(`Swapped ${playerA} ↔ ${playerB} 🔀`);
 }
 
 function hasFirstHalfScores(week) {
