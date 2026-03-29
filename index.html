@@ -641,6 +641,8 @@
             max-width: 400px;
             width: 90%;
             text-align: center;
+            max-height: 85vh;
+            overflow-y: auto;
         }
 
         .modal h3 { margin-bottom: 1rem; }
@@ -941,11 +943,26 @@
     <div id="history" class="section">
         <div class="card">
             <h2>📜 Match History</h2>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                <button class="btn btn-primary" onclick="showAddMatchModal()">➕ Add Past Match</button>
+            </div>
             <div id="historyContent">
                 <div class="empty-state">
                     <div class="emoji">📚</div>
                     <p>No completed weeks yet.</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Match Modal -->
+    <div class="modal-overlay" id="matchModal">
+        <div class="modal" style="max-width: 600px; text-align: left;">
+            <h3 id="matchModalTitle" style="margin-bottom: 1rem;">➕ Add Past Match</h3>
+            <div id="matchModalBody"></div>
+            <div class="modal-buttons" style="margin-top: 1.5rem;">
+                <button class="btn btn-secondary" onclick="closeMatchModal()">Cancel</button>
+                <button class="btn btn-primary" id="matchModalSave" onclick="saveMatchModal()">Save</button>
             </div>
         </div>
     </div>
@@ -1658,6 +1675,7 @@ function loadWeek() {
     }
     if (week.completed) {
         html += '<span style="color: var(--green); font-weight: 600;">✅ Week completed!</span>';
+        html += ' <button class="btn btn-secondary" style="margin-left:0.5rem;padding:0.3rem 0.8rem;font-size:0.8rem;" onclick="reopenWeek(' + weekIndex + ')">🔓 Reopen</button>';
     }
     html += '</div>';
 
@@ -1816,6 +1834,16 @@ function completeWeek(weekIndex) {
     showToast('Week completed! 🎉');
 }
 
+function reopenWeek(weekIndex) {
+    if (!confirm('Reopen this week? You can edit scores and set up the second half again.')) return;
+    const data = loadData();
+    data.weeks[weekIndex].completed = false;
+    saveData(data);
+    loadWeek();
+    updateLeaderboard();
+    showToast('Week reopened 🔓');
+}
+
 // ==================== LEADERBOARD ====================
 function updateLeaderboard() {
     const data = loadData();
@@ -1905,22 +1933,28 @@ function updateLeaderboard() {
 // ==================== HISTORY ====================
 function updateHistory() {
     const data = loadData();
-    const completed = data.weeks.filter(w => w.completed).reverse();
+    const allWeeks = [...data.weeks].reverse();
 
-    if (completed.length === 0) {
+    if (allWeeks.length === 0) {
         document.getElementById('historyContent').innerHTML = `
-            <div class="empty-state"><div class="emoji">📚</div><p>No completed weeks yet.</p></div>`;
+            <div class="empty-state"><div class="emoji">📚</div><p>No matches yet.</p></div>`;
         return;
     }
 
     let html = '';
-    for (const week of completed) {
+    for (const week of allWeeks) {
+        const weekIndex = data.weeks.indexOf(week);
         const groupLabel = week.group === 'A' ? '🔵 A' : '🟣 B';
+        const statusIcon = week.completed ? '✅' : '⏳';
         const subsInfo = week.subs && week.subs.length > 0 ? ` • Subs: ${week.subs.join(', ')}` : '';
         html += `<div class="week-history">
             <div class="week-history-header" onclick="this.nextElementSibling.classList.toggle('open')">
-                <span>Week ${week.number} — ${week.date} ${groupLabel}${subsInfo}</span>
-                <span>▼</span>
+                <span>${statusIcon} Week ${week.number} — ${week.date} ${groupLabel}${subsInfo}</span>
+                <span style="display:flex;align-items:center;gap:0.5rem;">
+                    <button class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="event.stopPropagation(); editWeekMatch(${weekIndex})">✏️ Edit</button>
+                    <button class="btn btn-danger" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="event.stopPropagation(); deleteWeek(${weekIndex})">🗑</button>
+                    <span>▼</span>
+                </span>
             </div>
             <div class="week-history-body">`;
 
@@ -1940,6 +1974,47 @@ function updateHistory() {
     document.getElementById('historyContent').innerHTML = html;
 }
 
+function deleteWeek(weekIndex) {
+    const data = loadData();
+    const week = data.weeks[weekIndex];
+    if (!confirm(`Delete Week ${week.number} (${week.date})? This will remove all scores and pairings for this week.`)) return;
+
+    // Remove the pairings from history
+    removePairingsForWeek(data, week);
+
+    data.weeks.splice(weekIndex, 1);
+
+    // Renumber remaining weeks
+    data.weeks.forEach((w, i) => w.number = i + 1);
+
+    saveData(data);
+    updateHistory();
+    updateLeaderboard();
+    populateWeekSelect();
+    loadWeek();
+    updateSeasonBar();
+    showToast('Week deleted 🗑');
+}
+
+function removePairingsForWeek(data, week) {
+    if (!week.firstHalf) return;
+    const weekPairs = [];
+    for (const courtKey of Object.keys(week.firstHalf)) {
+        const court = week.firstHalf[courtKey];
+        if (court.teamA) weekPairs.push([...court.teamA]);
+        if (court.teamB) weekPairs.push([...court.teamB]);
+    }
+    // For each pair generated this week, remove one occurrence from pairingHistory
+    for (const pair of weekPairs) {
+        if (pair.length !== 2) continue;
+        const [a, b] = pair;
+        const idx = data.pairingHistory.findIndex(([x, y]) =>
+            (x === a && y === b) || (x === b && y === a)
+        );
+        if (idx !== -1) data.pairingHistory.splice(idx, 1);
+    }
+}
+
 function renderHistoryMatch(court, label) {
     const winner = court.scoreA > court.scoreB ? 'A' : court.scoreB > court.scoreA ? 'B' : 'tie';
     const nameA = court.teamA.join(' & ');
@@ -1950,6 +2025,285 @@ function renderHistoryMatch(court, label) {
         <span style="font-weight:700;color:var(--accent);margin:0 0.5rem">${court.scoreA} – ${court.scoreB}</span>
         <span style="font-weight:${winner === 'B' ? '700' : '400'}">${nameB}</span>
     </div>`;
+}
+
+// ==================== ADD / EDIT MATCH MODAL ====================
+let matchModalMode = 'add'; // 'add' or 'edit'
+let matchModalWeekIndex = null;
+
+function getPlayerOptions(data) {
+    return [...new Set([...data.groupA, ...data.groupB, ...data.subs, ...getAllPlayers(data)])];
+}
+
+function playerSelectHtml(id, allPlayers, selected) {
+    let html = `<select id="${id}" style="flex:1;min-width:100px;">`;
+    html += `<option value="">— pick —</option>`;
+    for (const p of allPlayers) {
+        html += `<option value="${p}" ${p === selected ? 'selected' : ''}>${p}</option>`;
+    }
+    html += `</select>`;
+    return html;
+}
+
+function buildMatchFormHtml(data, week) {
+    const allPlayers = getPlayerOptions(data);
+    const hasSecond = week && week.secondHalf;
+
+    // Default date: next available Tuesday
+    const defaultDate = week ? week.date : new Date().toISOString().split('T')[0];
+    const defaultGroup = week ? week.group : 'A';
+
+    // First half courts
+    const fh = week ? week.firstHalf : {
+        court1: { teamA: ['',''], teamB: ['',''], scoreA: null, scoreB: null },
+        court2: { teamA: ['',''], teamB: ['',''], scoreA: null, scoreB: null }
+    };
+
+    // Second half courts
+    const sh = hasSecond ? week.secondHalf : {
+        winners: { teamA: ['',''], teamB: ['',''], scoreA: null, scoreB: null },
+        losers: { teamA: ['',''], teamB: ['',''], scoreA: null, scoreB: null }
+    };
+
+    let html = `
+        <div style="display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:140px;">
+                <label style="font-size:0.8rem;color:var(--text-muted);display:block;margin-bottom:0.25rem;">Date</label>
+                <input type="date" id="mm_date" value="${defaultDate}" style="width:100%;">
+            </div>
+            <div style="flex:1;min-width:100px;">
+                <label style="font-size:0.8rem;color:var(--text-muted);display:block;margin-bottom:0.25rem;">Group</label>
+                <select id="mm_group" style="width:100%;">
+                    <option value="A" ${defaultGroup === 'A' ? 'selected' : ''}>🔵 Group A</option>
+                    <option value="B" ${defaultGroup === 'B' ? 'selected' : ''}>🟣 Group B</option>
+                </select>
+            </div>
+        </div>
+
+        <h3 style="margin-bottom:0.5rem;color:var(--text);">First Half</h3>
+        ${buildCourtFormHtml('Court 1', 'mm_fh_c1', allPlayers, fh.court1)}
+        ${buildCourtFormHtml('Court 2', 'mm_fh_c2', allPlayers, fh.court2)}
+
+        <div style="margin-top:0.75rem;">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.9rem;">
+                <input type="checkbox" id="mm_hasSecondHalf" ${hasSecond ? 'checked' : ''} onchange="toggleSecondHalfForm()">
+                Include Second Half
+            </label>
+        </div>
+
+        <div id="mm_secondHalfForm" style="display:${hasSecond ? 'block' : 'none'};margin-top:0.75rem;">
+            <h3 style="margin-bottom:0.5rem;color:var(--accent);">Second Half</h3>
+            ${buildCourtFormHtml('🏆 Winners', 'mm_sh_win', allPlayers, sh.winners)}
+            ${buildCourtFormHtml('Consolation', 'mm_sh_lose', allPlayers, sh.losers)}
+        </div>
+    `;
+
+    return html;
+}
+
+function buildCourtFormHtml(label, prefix, allPlayers, court) {
+    const tA = court.teamA || ['', ''];
+    const tB = court.teamB || ['', ''];
+    const sA = court.scoreA !== null && court.scoreA !== undefined ? court.scoreA : '';
+    const sB = court.scoreB !== null && court.scoreB !== undefined ? court.scoreB : '';
+
+    return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.75rem;margin-bottom:0.5rem;">
+            <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);margin-bottom:0.5rem;">${label}</div>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                <div style="flex:1;min-width:120px;">
+                    <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">Team A</div>
+                    <div style="display:flex;gap:0.3rem;">
+                        ${playerSelectHtml(prefix + '_tA1', allPlayers, tA[0])}
+                        ${playerSelectHtml(prefix + '_tA2', allPlayers, tA[1])}
+                    </div>
+                </div>
+                <div style="display:flex;gap:0.3rem;align-items:flex-end;">
+                    <div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;text-align:center;">Score</div>
+                        <input type="number" id="${prefix}_sA" value="${sA}" min="0" style="width:50px;text-align:center;font-weight:700;">
+                    </div>
+                    <span style="color:var(--accent);font-weight:800;padding-bottom:0.4rem;">–</span>
+                    <div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;text-align:center;">Score</div>
+                        <input type="number" id="${prefix}_sB" value="${sB}" min="0" style="width:50px;text-align:center;font-weight:700;">
+                    </div>
+                </div>
+                <div style="flex:1;min-width:120px;">
+                    <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">Team B</div>
+                    <div style="display:flex;gap:0.3rem;">
+                        ${playerSelectHtml(prefix + '_tB1', allPlayers, tB[0])}
+                        ${playerSelectHtml(prefix + '_tB2', allPlayers, tB[1])}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function toggleSecondHalfForm() {
+    const show = document.getElementById('mm_hasSecondHalf').checked;
+    document.getElementById('mm_secondHalfForm').style.display = show ? 'block' : 'none';
+}
+
+function showAddMatchModal() {
+    matchModalMode = 'add';
+    matchModalWeekIndex = null;
+    const data = loadData();
+
+    document.getElementById('matchModalTitle').textContent = '➕ Add Past Match';
+    document.getElementById('matchModalSave').textContent = 'Add Match';
+    document.getElementById('matchModalBody').innerHTML = buildMatchFormHtml(data, null);
+    document.getElementById('matchModal').classList.add('show');
+}
+
+function editWeekMatch(weekIndex) {
+    matchModalMode = 'edit';
+    matchModalWeekIndex = weekIndex;
+    const data = loadData();
+    const week = data.weeks[weekIndex];
+
+    document.getElementById('matchModalTitle').textContent = `✏️ Edit Week ${week.number}`;
+    document.getElementById('matchModalSave').textContent = 'Save Changes';
+    document.getElementById('matchModalBody').innerHTML = buildMatchFormHtml(data, week);
+    document.getElementById('matchModal').classList.add('show');
+}
+
+function closeMatchModal() {
+    document.getElementById('matchModal').classList.remove('show');
+}
+
+function readCourtFromForm(prefix) {
+    const tA1 = document.getElementById(prefix + '_tA1').value;
+    const tA2 = document.getElementById(prefix + '_tA2').value;
+    const tB1 = document.getElementById(prefix + '_tB1').value;
+    const tB2 = document.getElementById(prefix + '_tB2').value;
+    const sA = document.getElementById(prefix + '_sA').value;
+    const sB = document.getElementById(prefix + '_sB').value;
+
+    return {
+        teamA: [tA1, tA2],
+        teamB: [tB1, tB2],
+        scoreA: sA !== '' ? parseInt(sA) : null,
+        scoreB: sB !== '' ? parseInt(sB) : null
+    };
+}
+
+function saveMatchModal() {
+    const data = loadData();
+
+    const date = document.getElementById('mm_date').value;
+    const group = document.getElementById('mm_group').value;
+    const hasSecondHalf = document.getElementById('mm_hasSecondHalf').checked;
+
+    const fhCourt1 = readCourtFromForm('mm_fh_c1');
+    const fhCourt2 = readCourtFromForm('mm_fh_c2');
+
+    // Validate: all 8 first-half player slots must be filled
+    const firstHalfPlayers = [...fhCourt1.teamA, ...fhCourt1.teamB, ...fhCourt2.teamA, ...fhCourt2.teamB];
+    if (firstHalfPlayers.some(p => !p)) {
+        showToast('Please select all 8 players for the first half');
+        return;
+    }
+
+    // Check for duplicates
+    const uniqueCheck = new Set(firstHalfPlayers);
+    if (uniqueCheck.size !== 8) {
+        showToast('Each player can only appear once!');
+        return;
+    }
+
+    // Validate scores
+    if (fhCourt1.scoreA === null || fhCourt1.scoreB === null || fhCourt2.scoreA === null || fhCourt2.scoreB === null) {
+        showToast('Please enter all first half scores');
+        return;
+    }
+
+    let secondHalf = null;
+    if (hasSecondHalf) {
+        const shWin = readCourtFromForm('mm_sh_win');
+        const shLose = readCourtFromForm('mm_sh_lose');
+        const shPlayers = [...shWin.teamA, ...shWin.teamB, ...shLose.teamA, ...shLose.teamB];
+        if (shPlayers.some(p => !p)) {
+            showToast('Please select all players for the second half');
+            return;
+        }
+        if (shWin.scoreA === null || shWin.scoreB === null || shLose.scoreA === null || shLose.scoreB === null) {
+            showToast('Please enter all second half scores');
+            return;
+        }
+        secondHalf = { winners: shWin, losers: shLose };
+    }
+
+    const defaultPlayers = group === 'A' ? data.groupA : data.groupB;
+    const subNames = firstHalfPlayers.filter(p => !defaultPlayers.includes(p));
+
+    if (matchModalMode === 'edit') {
+        const week = data.weeks[matchModalWeekIndex];
+
+        // Remove old pairings from history
+        removePairingsForWeek(data, week);
+
+        week.date = date;
+        week.group = group;
+        week.roster = [...firstHalfPlayers];
+        week.subs = subNames;
+        week.firstHalf = { court1: fhCourt1, court2: fhCourt2 };
+        week.secondHalf = secondHalf;
+        week.completed = true;
+
+        // Add new pairings
+        addPairingsForWeek(data, week);
+
+        saveData(data);
+        closeMatchModal();
+        updateHistory();
+        updateLeaderboard();
+        populateWeekSelect();
+        loadWeek();
+        showToast(`Week ${week.number} updated! ✏️`);
+    } else {
+        // Add mode — insert as a new completed week
+        const weekNum = data.weeks.length + 1;
+
+        const week = {
+            number: weekNum,
+            date: date,
+            group: group,
+            roster: [...firstHalfPlayers],
+            subs: subNames,
+            playlistUri: null,
+            firstHalf: { court1: fhCourt1, court2: fhCourt2 },
+            secondHalf: secondHalf,
+            completed: true
+        };
+
+        data.weeks.push(week);
+
+        // Add pairings to history
+        addPairingsForWeek(data, week);
+
+        // Sort weeks by date
+        data.weeks.sort((a, b) => a.date.localeCompare(b.date));
+        data.weeks.forEach((w, i) => w.number = i + 1);
+
+        saveData(data);
+        closeMatchModal();
+        updateHistory();
+        updateLeaderboard();
+        populateWeekSelect();
+        loadWeek();
+        updateSeasonBar();
+        showToast(`Week ${week.number} added! ➕`);
+    }
+}
+
+function addPairingsForWeek(data, week) {
+    if (!week.firstHalf) return;
+    for (const courtKey of Object.keys(week.firstHalf)) {
+        const court = week.firstHalf[courtKey];
+        if (court.teamA && court.teamA.length === 2) data.pairingHistory.push([...court.teamA]);
+        if (court.teamB && court.teamB.length === 2) data.pairingHistory.push([...court.teamB]);
+    }
 }
 
 // ==================== UI HELPERS ====================
