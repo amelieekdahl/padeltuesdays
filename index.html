@@ -541,6 +541,19 @@
         .roster-slot.is-sub .sub-badge { display: inline-block; }
         .roster-slot.is-sub { border-color: rgba(251, 146, 60, 0.4); }
 
+        .roster-slot.is-adhoc { border-color: rgba(251, 146, 60, 0.6); background: rgba(251, 146, 60, 0.06); }
+        .roster-slot.is-adhoc .sub-badge { display: inline-block; background: rgba(251, 146, 60, 0.25); }
+
+        .adhoc-name-input {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            font-family: inherit;
+            outline: none;
+        }
+        .adhoc-name-input:focus { border-color: var(--accent); }
+
         .group-indicator {
             display: inline-flex;
             align-items: center;
@@ -1286,7 +1299,7 @@ function renderNextWeek() {
             <span class="group-indicator group-${defaultGroup.toLowerCase()}">${groupLabel}'s turn</span>
         </div>
         <div class="info-box info" style="margin-bottom: 1rem;">
-            The roster below is auto-filled from ${groupLabel}. Swap any player using the dropdowns — great for when someone's ill and needs a sub. You need exactly 8 players to generate matches.
+            The roster below is auto-filled from ${groupLabel}. Swap any player using the dropdowns — great for when someone's ill and needs a sub. You can also pick <strong>"✏️ Type a name..."</strong> to add a fill-in player who isn't in the rotation. Fill-ins will appear on the leaderboard but won't be part of the regular groups. You need exactly 8 players to generate matches.
         </div>
         ${playlistSelectorHtml}
     `;
@@ -1297,13 +1310,16 @@ function renderNextWeek() {
 
     // Build 8 slots
     let html = '';
+    const allKnownPlayers = [...new Set([...data.groupA, ...data.groupB, ...data.subs])];
+
     for (let i = 0; i < 8; i++) {
         const current = roster[i] || '';
         const isSub = current && !defaultPlayers.includes(current);
+        const isAdHoc = current && !allKnownPlayers.includes(current);
 
-        html += `<div class="roster-slot ${isSub ? 'is-sub' : ''}">
+        html += `<div class="roster-slot ${isSub ? 'is-sub' : ''} ${isAdHoc ? 'is-adhoc' : ''}">
             <div class="slot-number">${i + 1}</div>
-            <select onchange="updateRosterSlot(${i}, this.value)">
+            <select onchange="updateRosterSlot(${i}, this.value)" ${isAdHoc ? 'style="display:none"' : ''}>
                 <option value="">— empty —</option>`;
 
         // Group options first (the default group)
@@ -1330,8 +1346,25 @@ function renderNextWeek() {
             html += '</optgroup>';
         }
 
-        html += `</select>
-            <span class="sub-badge">SUB</span>
+        // Special option to trigger ad-hoc name entry
+        html += `<optgroup label="Other">`;
+        html += `<option value="__adhoc__">✏️ Type a name...</option>`;
+        html += `</optgroup>`;
+
+        html += `</select>`;
+
+        // Ad-hoc name input (shown when a typed-in name is active)
+        if (isAdHoc) {
+            html += `<div class="adhoc-input-wrap" style="display:flex;flex:1;gap:0.4rem;align-items:center;">
+                <input type="text" class="adhoc-name-input" value="${current}" placeholder="Fill-in name..."
+                    onchange="updateRosterSlot(${i}, this.value)"
+                    onkeypress="if(event.key==='Enter'){this.blur()}"
+                    style="flex:1;padding:0.4rem 0.6rem;font-size:0.85rem;">
+                <button class="btn btn-secondary" onclick="clearAdHocSlot(${i})" style="padding:0.3rem 0.6rem;font-size:0.75rem;" title="Switch back to dropdown">✕</button>
+            </div>`;
+        }
+
+        html += `<span class="sub-badge">${isAdHoc ? 'FILL-IN' : 'SUB'}</span>
         </div>`;
     }
 
@@ -1355,7 +1388,31 @@ function updateRosterSlot(index, value) {
     if (!data.nextWeekRoster) data.nextWeekRoster = [];
     // Ensure array has 8 slots
     while (data.nextWeekRoster.length < 8) data.nextWeekRoster.push('');
-    data.nextWeekRoster[index] = value;
+
+    if (value === '__adhoc__') {
+        // Prompt for an ad-hoc fill-in name
+        const name = prompt('Enter the fill-in player\'s name:');
+        if (!name || !name.trim()) {
+            // Cancelled — revert to empty
+            data.nextWeekRoster[index] = '';
+            saveData(data);
+            renderNextWeek();
+            return;
+        }
+        data.nextWeekRoster[index] = name.trim();
+    } else {
+        data.nextWeekRoster[index] = value;
+    }
+
+    saveData(data);
+    renderNextWeek();
+}
+
+function clearAdHocSlot(index) {
+    const data = loadData();
+    if (!data.nextWeekRoster) data.nextWeekRoster = [];
+    while (data.nextWeekRoster.length < 8) data.nextWeekRoster.push('');
+    data.nextWeekRoster[index] = '';
     saveData(data);
     renderNextWeek();
 }
@@ -1448,6 +1505,7 @@ function confirmAndGenerate() {
 
 // ==================== PAIRING ALGORITHM ====================
 function generatePairings(players, pairingHistory) {
+    // Build pair count map for this week's players
     const pairCount = {};
     for (const p of players) {
         for (const q of players) {
@@ -1459,22 +1517,60 @@ function generatePairings(players, pairingHistory) {
         if (pairCount[key] !== undefined) pairCount[key]++;
     }
 
+    // For each player, find the minimum times they've been paired with
+    // any of the other players this week. A pairing is only "fair" if
+    // both players in the pair have their count at the global minimum
+    // for that player — i.e., they haven't played together yet in the
+    // current round-robin cycle.
+    //
+    // playerMin[p] = the fewest times p has been paired with any of
+    // this week's other players. A pair (p, q) with count > min(p) AND
+    // count > min(q) means both p and q have un-played partners left,
+    // so pairing them is unfair.
+
+    const playerMin = {};
+    for (const p of players) {
+        let min = Infinity;
+        for (const q of players) {
+            if (p === q) continue;
+            const key = p < q ? p + '|' + q : q + '|' + p;
+            min = Math.min(min, pairCount[key] || 0);
+        }
+        playerMin[p] = min;
+    }
+
     let bestPairing = null;
     let bestScore = Infinity;
 
+    function scorePairing(pairs) {
+        let violations = 0;   // pairs where both players have cheaper options
+        let maxCount = 0;
+        let totalCount = 0;
+
+        for (const [a, b] of pairs) {
+            const key = a < b ? a + '|' + b : b + '|' + a;
+            const count = pairCount[key] || 0;
+
+            // A violation: this pair has played together more than
+            // the minimum for BOTH players — meaning both have
+            // partners they haven't played with yet (or played less)
+            if (count > playerMin[a] && count > playerMin[b]) {
+                violations++;
+            }
+
+            maxCount = Math.max(maxCount, count);
+            totalCount += count;
+        }
+
+        // Priority: fewest violations >>> lowest max count >>> lowest total
+        return violations * 1000000 + maxCount * 1000 + totalCount;
+    }
+
     function findMatchings(remaining, current) {
         if (remaining.length === 0) {
-            let score = 0;
-            let maxCount = 0;
-            for (const [a, b] of current) {
-                const key = a < b ? a + '|' + b : b + '|' + a;
-                const count = pairCount[key] || 0;
-                score += count;
-                maxCount = Math.max(maxCount, count);
-            }
-            const totalScore = maxCount * 1000 + score;
-            if (totalScore < bestScore) {
-                bestScore = totalScore;
+            const score = scorePairing(current);
+            if (score < bestScore) {
+                bestScore = score;
                 bestPairing = [...current];
             }
             return;
@@ -1482,8 +1578,14 @@ function generatePairings(players, pairingHistory) {
 
         const first = remaining[0];
         const rest = remaining.slice(1);
-        for (let i = 0; i < rest.length; i++) {
-            const partner = rest[i];
+
+        // Sort candidates: prefer partners this player has played with least
+        const candidates = rest.map((partner, i) => {
+            const key = first < partner ? first + '|' + partner : partner + '|' + first;
+            return { partner, i, count: pairCount[key] || 0 };
+        }).sort((a, b) => a.count - b.count);
+
+        for (const { partner, i } of candidates) {
             const newRemaining = rest.filter((_, j) => j !== i);
             current.push([first, partner]);
             findMatchings(newRemaining, current);
@@ -1782,7 +1884,8 @@ function updateLeaderboard() {
         // Show which group they belong to
         const inA = data.groupA.includes(p.name);
         const inB = data.groupB.includes(p.name);
-        const groupTag = inA && inB ? 'A+B' : inA ? 'A' : inB ? 'B' : 'Sub';
+        const inSubs = data.subs.includes(p.name);
+        const groupTag = inA && inB ? 'A+B' : inA ? 'A' : inB ? 'B' : inSubs ? 'Sub' : 'Fill-in';
         html += `<tr>
             <td><span class="rank ${rankClass}">${medal || (i + 1)}</span></td>
             <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${groupTag}</span></td>
