@@ -1282,9 +1282,11 @@ function renderNextWeek() {
     const groupLabel = defaultGroup === 'A' ? '🔵 Group A' : '🟣 Group B';
     const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
 
-    // If no roster is proposed yet, set the default
-    if (!data.nextWeekRoster) {
+    // Track which group this roster was built for
+    const expectedGroup = defaultGroup;
+    if (!data.nextWeekRoster || data.nextWeekRoster.length === 0 || data._nextWeekGroup !== expectedGroup) {
         data.nextWeekRoster = [...defaultPlayers];
+        data._nextWeekGroup = expectedGroup;
         saveData(data);
     }
 
@@ -1463,6 +1465,7 @@ function resetNextWeekToDefault() {
     const weekNum = getNextWeekNumber(data);
     const defaultGroup = getDefaultGroupForWeek(weekNum);
     data.nextWeekRoster = [...(defaultGroup === 'A' ? data.groupA : data.groupB)];
+    data._nextWeekGroup = defaultGroup;
     data.nextWeekPlaylistIndex = null; // reset playlist to default rotation
     saveData(data);
     renderNextWeek();
@@ -1532,6 +1535,7 @@ function confirmAndGenerate() {
 
     data.weeks.push(week);
     data.nextWeekRoster = null; // reset for next time
+    data._nextWeekGroup = null; // reset group tracking
     data.nextWeekPlaylistIndex = null; // reset playlist selection for next time
     saveData(data);
 
