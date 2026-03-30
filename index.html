@@ -1098,6 +1098,7 @@ const STORAGE_KEY = 'padel-tuesdays';
 const SHEETS_API = 'https://script.google.com/macros/s/AKfycbzUx9fK6HddJj8qd8OXSOWqhQaJS9nSDBfh9c3AVGyst6ExS_fgXf-H1gh_ipxCVgfp/exec';
 
 const SEASON_START = new Date('2026-03-31'); // First Tuesday
+const START_WEEK_NUMBER = 14; // Calendar week number of the first session
 
 // Cache for loaded data to avoid constant fetches
 let _cachedData = null;
@@ -1275,6 +1276,11 @@ function getNextWeekNumber(data) {
     return data.weeks.length + 1;
 }
 
+// Display week number (calendar week)
+function getDisplayWeekNumber(weekNum) {
+    return START_WEEK_NUMBER + (weekNum - 1);
+}
+
 function getDefaultGroupForWeek(weekNum) {
     // Odd weeks = Group A, Even weeks = Group B
     return weekNum % 2 === 1 ? 'A' : 'B';
@@ -1409,7 +1415,7 @@ function renderNextWeek() {
 
     info.innerHTML = `
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-            <span style="font-weight: 700; font-size: 1.1rem;">Week ${weekNum}</span>
+            <span style="font-weight: 700; font-size: 1.1rem;">Week ${getDisplayWeekNumber(weekNum)}</span>
             <span style="color: var(--text-muted);">📆 ${formatDate(weekDate)}</span>
             <span class="group-indicator group-${defaultGroup.toLowerCase()}">${groupLabel}'s turn</span>
         </div>
@@ -1629,7 +1635,7 @@ function confirmAndGenerate() {
     document.getElementById('weekSelect').value = weekNum - 1;
     loadWeek();
     updateSeasonBar();
-    showToast(`Week ${weekNum} generated! 🎲`);
+    showToast(`Week ${getDisplayWeekNumber(weekNum)} generated! 🎲`);
 }
 
 // ==================== PAIRING ALGORITHM ====================
@@ -2224,7 +2230,7 @@ function updateHistory() {
         const subsInfo = week.subs && week.subs.length > 0 ? ` • Subs: ${week.subs.join(', ')}` : '';
         html += `<div class="week-history">
             <div class="week-history-header" onclick="this.nextElementSibling.classList.toggle('open')">
-                <span>${statusIcon} Week ${week.number} — ${week.date} ${groupLabel}${subsInfo}</span>
+                <span>${statusIcon} Week ${getDisplayWeekNumber(week.number)} — ${week.date} ${groupLabel}${subsInfo}</span>
                 <span style="display:flex;align-items:center;gap:0.5rem;">
                     <button class="btn btn-secondary" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="event.stopPropagation(); editWeekMatch(${weekIndex})">✏️ Edit</button>
                     <button class="btn btn-danger" style="padding:0.25rem 0.6rem;font-size:0.75rem;" onclick="event.stopPropagation(); deleteWeek(${weekIndex})">🗑</button>
@@ -2252,7 +2258,7 @@ function updateHistory() {
 function deleteWeek(weekIndex) {
     const data = loadData();
     const week = data.weeks[weekIndex];
-    if (!confirm(`Delete Week ${week.number} (${week.date})? This will remove all scores and pairings for this week.`)) return;
+    if (!confirm(`Delete Week ${getDisplayWeekNumber(week.number)} (${week.date})? This will remove all scores and pairings for this week.`)) return;
 
     // Remove the pairings from history
     removePairingsForWeek(data, week);
@@ -2437,7 +2443,7 @@ function editWeekMatch(weekIndex) {
     const data = loadData();
     const week = data.weeks[weekIndex];
 
-    document.getElementById('matchModalTitle').textContent = `✏️ Edit Week ${week.number}`;
+    document.getElementById('matchModalTitle').textContent = `✏️ Edit Week ${getDisplayWeekNumber(week.number)}`;
     document.getElementById('matchModalSave').textContent = 'Save Changes';
     document.getElementById('matchModalBody').innerHTML = buildMatchFormHtml(data, week);
     document.getElementById('matchModal').classList.add('show');
@@ -2535,7 +2541,7 @@ function saveMatchModal() {
         updateLeaderboard();
         populateWeekSelect();
         loadWeek();
-        showToast(`Week ${week.number} updated! ✏️`);
+        showToast(`Week ${getDisplayWeekNumber(week.number)} updated! ✏️`);
     } else {
         // Add mode — insert as a new completed week
         const weekNum = data.weeks.length + 1;
@@ -2568,7 +2574,7 @@ function saveMatchModal() {
         populateWeekSelect();
         loadWeek();
         updateSeasonBar();
-        showToast(`Week ${week.number} added! ➕`);
+        showToast(`Week ${getDisplayWeekNumber(week.number)} added! ➕`);
     }
 }
 
@@ -2605,7 +2611,7 @@ function populateWeekSelect() {
     data.weeks.forEach((w, i) => {
         const status = w.completed ? '✅' : '⏳';
         const groupTag = w.group === 'A' ? '🔵' : '🟣';
-        select.innerHTML += `<option value="${i}">${status} ${groupTag} Week ${w.number} — ${w.date}</option>`;
+        select.innerHTML += `<option value="${i}">${status} ${groupTag} Week ${getDisplayWeekNumber(w.number)} — ${w.date}</option>`;
     });
     select.value = data.weeks.length - 1;
 }
@@ -2614,7 +2620,9 @@ function updateSeasonBar() {
     const data = loadData();
     const completed = data.weeks.filter(w => w.completed).length;
     const total = data.weeks.length;
-    document.getElementById('seasonWeekLabel').textContent = `Week ${total} / 20`;
+    const displayWeek = total > 0 ? getDisplayWeekNumber(total) : START_WEEK_NUMBER;
+    const lastWeek = START_WEEK_NUMBER + 20 - 1;
+    document.getElementById('seasonWeekLabel').textContent = `Week ${displayWeek} / ${lastWeek}`;
     document.getElementById('seasonProgressFill').style.width = (completed / 20 * 100) + '%';
     document.getElementById('seasonWeeksLeft').textContent = `${20 - total} weeks left`;
 }
