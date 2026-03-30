@@ -1121,31 +1121,37 @@ function loadData() {
     return JSON.parse(JSON.stringify(DEFAULT_DATA));
 }
 
-let _saveQueue = null;  // pending save data
-let _saving = false;    // is a save in progress?
+let _saveTimer = null;   // debounce timer
+let _saving = false;     // is a save in progress?
+let _pendingSave = null; // latest data waiting to be saved
 
 function saveData(data) {
     // Save to localStorage immediately (fast)
     _cachedData = data;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    // Queue cloud save (debounced, with retry)
-    _saveQueue = data;
-    if (!_saving) _flushSave();
+
+    // Debounce cloud saves: wait 500ms for rapid changes to settle,
+    // then send a single save. If a save is in progress, queue it.
+    _pendingSave = JSON.parse(JSON.stringify(data)); // deep clone
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => _doCloudSave(), 500);
 }
 
-async function _flushSave() {
-    if (!_saveQueue) return;
-    _saving = true;
-    updateSyncIndicator('saving');
+async function _doCloudSave() {
+    if (_saving) return; // will be picked up after current save finishes
+    if (!_pendingSave) return;
 
-    const dataToSave = _saveQueue;
-    _saveQueue = null;
+    _saving = true;
+    const dataToSave = _pendingSave;
+    _pendingSave = null;
+    updateSyncIndicator('saving');
 
     let success = false;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            // Use no-cors POST — Google Apps Script redirects make cors mode fail,
-            // but no-cors POST bodies are still received by the server
+            // POST with no-cors: browser sends the body, server processes it,
+            // but we get an opaque response (status 0, no body readable).
+            // This is expected — Google Apps Script 302-redirects on POST.
             await fetch(SHEETS_API, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -1153,34 +1159,43 @@ async function _flushSave() {
                 body: JSON.stringify(dataToSave)
             });
 
-            // Verify the save by reading back from cloud
-            const verify = await fetch(SHEETS_API);
+            // Wait for the server to finish writing before verifying.
+            // Apps Script can take a few seconds to process.
+            await new Promise(r => setTimeout(r, 2000 + attempt * 2000));
+
+            // Verify by reading back — use cache-busting to avoid stale responses
+            const verify = await fetch(SHEETS_API + '?_t=' + Date.now());
             const cloudData = await verify.json();
+
             if (cloudData && cloudData.weeks !== undefined &&
-                JSON.stringify(cloudData.weeks) === JSON.stringify(dataToSave.weeks)) {
-                success = true;
-                break;
-            } else {
-                console.warn(`Cloud save verify failed (attempt ${attempt + 1}), retrying...`);
-                await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                cloudData.weeks.length === dataToSave.weeks.length) {
+                // Check that the latest week data matches (lightweight check)
+                const localLatest = JSON.stringify(dataToSave.weeks[dataToSave.weeks.length - 1] || null);
+                const cloudLatest = JSON.stringify(cloudData.weeks[cloudData.weeks.length - 1] || null);
+                if (localLatest === cloudLatest) {
+                    success = true;
+                    break;
+                }
             }
+            console.warn(`Cloud verify mismatch (attempt ${attempt + 1}), retrying full save...`);
         } catch (e) {
-            console.warn(`Cloud save failed (attempt ${attempt + 1}):`, e);
-            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            console.warn(`Cloud save error (attempt ${attempt + 1}):`, e);
+            await new Promise(r => setTimeout(r, 2000));
         }
     }
 
     _saving = false;
     updateSyncIndicator(success ? 'saved' : 'error');
 
-    // If there's a new save queued while we were saving, flush it
-    if (_saveQueue) _flushSave();
+    // If more saves came in while we were saving, flush them now
+    if (_pendingSave) _doCloudSave();
 }
 
 async function loadFromCloud() {
     updateSyncIndicator('loading');
     try {
-        const res = await fetch(SHEETS_API);
+        // Cache-bust to get fresh data
+        const res = await fetch(SHEETS_API + '?_t=' + Date.now());
         const data = await res.json();
         if (data && data.groupA !== undefined) {
             _cachedData = data;
@@ -1204,7 +1219,7 @@ function updateSyncIndicator(state) {
         loading: { icon: '☁️', text: 'Loading...', color: 'var(--blue)' },
         saving:  { icon: '💾', text: 'Saving...', color: 'var(--accent)' },
         saved:   { icon: '✅', text: 'Synced', color: 'var(--green)' },
-        error:   { icon: '⚠️', text: 'Sync failed — retrying', color: 'var(--red)' },
+        error:   { icon: '⚠️', text: 'Sync failed', color: 'var(--red)' },
         offline: { icon: '📴', text: 'Offline — local only', color: 'var(--orange)' }
     };
     const s = states[state] || states.saved;
@@ -1218,10 +1233,19 @@ function updateSyncIndicator(state) {
     }
 }
 
-// Load from cloud on page load
+// Also save to cloud when the user leaves the page (last chance)
+window.addEventListener('beforeunload', () => {
+    const data = loadData();
+    if (data && data.groupA) {
+        // navigator.sendBeacon works even during page unload
+        navigator.sendBeacon(SHEETS_API, JSON.stringify(data));
+    }
+});
+
+// Load from cloud on page load, THEN init (to avoid overwriting cloud data)
 loadFromCloud().then(data => {
     _cachedData = data;
-    renderAll();
+    init();
 });
 
 // Get all known players across all groups
@@ -3072,22 +3096,33 @@ function renderAll() {
     updateLeaderboard();
 }
 
-function init() {
+function init(skipCloudSave) {
     const data = loadData();
+
+    let changed = false;
 
     // Pre-seed rosters if empty
     if (data.groupA.length === 0 && data.groupB.length === 0) {
         data.groupA = [...DEFAULT_GROUP_A];
         data.groupB = [...DEFAULT_GROUP_B];
         data.subs = [];
+        changed = true;
     }
 
     // Pre-seed playlists if empty
     if (!data.playlists || data.playlists.length === 0) {
         data.playlists = [...DEFAULT_PLAYLISTS];
+        changed = true;
     }
 
-    saveData(data);
+    if (changed) {
+        saveData(data);
+    } else {
+        // Just update local cache, don't trigger cloud save
+        _cachedData = data;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
     renderAll();
     // Gallery & slideshow are loaded async from cloud via refreshGalleryCache()
 }
