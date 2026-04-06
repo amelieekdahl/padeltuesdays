@@ -4,7 +4,7 @@
 
 ## Core Concept
 
-A 20-week season of weekly Tuesday padel matches. Players are split into two groups (**Group A** and **Group B**) that alternate weeks (odd weeks = Group A, even weeks = Group B). Each week, 8 players play on 2 courts. The season starts March 31, 2026.
+A 26-week season of weekly Tuesday padel matches. Players are split into two groups (**Group A** and **Group B**) that alternate weeks (odd weeks = Group A, even weeks = Group B). Each week, 8 players play on 2 courts. The season starts January 6, 2026 (week 2) and ends June 30, 2026 (week 27).
 
 ## Architecture
 
@@ -22,11 +22,11 @@ A 20-week season of weekly Tuesday padel matches. Players are split into two gro
 
 ## Navigation (6 tabs)
 
-1. **📋 Match Day** — View current week's matches, enter scores, set up second half, complete weeks. Shows season progress bar (X/20 weeks), week selector dropdown, court cards with score inputs, and Spotify playlist embed for the week. Completed weeks can be **reopened** via a 🔓 Reopen button to fix scores or re-do the second half.
+1. **📋 Match Day** — View current week's matches, enter scores, set up second half, complete weeks. Shows season progress bar (X/26 weeks), week selector dropdown, court cards with score inputs, and Spotify playlist embed for the week. Completed weeks can be **reopened** via a 🔓 Reopen button to fix scores or re-do the second half.
 
 2. **📅 Next Week** — Plan the upcoming week's roster. Auto-fills from the scheduled group. Each slot dropdown is organized into sections: the default group's players first, then players exclusive to the other group (e.g., on a Group A week, only Louise and Ullis appear in the Group A section, while Monica and Sara C appear under "Group B" — shared players like Ida, Cecilia, etc. only appear under the default group), then subs, and finally a **"✏️ Type a name..."** option for **fill-in players** not in any group — useful when someone is sick and a friend fills in. Players already selected are disabled in other slots. Fill-ins appear with a "FILL-IN" badge and orange highlight, and are tracked on the leaderboard but don't pollute the regular group rosters. Shows a playlist selector for the week. Requires exactly 8 players to generate. "Confirm & Generate Matches" button locks in the roster and creates match pairings.
 
-3. **🏅 Leaderboard** — Season standings table showing rank (with medal emojis for top 3), player name + group tag (A, B, A+B, Sub, or Fill-in), total games won (with visual bar), weeks played, and per-week average. Sorted by total games won. Fill-in players who aren't in any roster group are tagged as "Fill-in".
+3. **🏅 Leaderboard** — Season standings table showing rank (with medal emojis for top 3), player name + group tag (A, B, A+B, Sub, or Fill-in), average games won per week (with visual bar), total games won, and weeks played. **Sorted by average games won per week** (ties broken by total games). This ensures fair ranking regardless of how many weeks a player has attended. Fill-in players who aren't in any roster group are tagged as "Fill-in".
 
 4. **📜 History** — Accordion-style list of all weeks (newest first), showing both completed (✅) and in-progress (⏳) weeks. Each expands to show first-half and second-half results with team names and scores. Shows group indicator and sub names. Each week has **✏️ Edit** and **🗑 Delete** buttons. An **➕ Add Past Match** button at the top allows manually entering historical match results. Editing properly updates pairing history (removes old pairings, adds new ones). Deleting a week cleans up pairings and renumbers remaining weeks.
 

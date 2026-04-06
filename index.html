@@ -873,7 +873,7 @@
     <div class="header-bg-slide" id="headerBgSlideB"></div>
     <div class="header-bg-overlay"></div>
     <h1>🏆 Smashing <span>Ladies</span></h1>
-    <p>Season 2026 • Rotating Rosters • 20 Weeks • 1 Champion</p>
+    <p>Season 2026 • Rotating Rosters • 26 Weeks • 1 Champion</p>
     <div id="syncIndicator" style="position:relative;z-index:2;margin-top:0.5rem;font-size:0.75rem;font-weight:500;min-height:1.2em;"></div>
 </div>
 
@@ -891,11 +891,11 @@
     <!-- MATCH DAY -->
     <div id="matchday" class="section active">
         <div class="season-bar">
-            <span id="seasonWeekLabel">Week 0 / 20</span>
+            <span id="seasonWeekLabel">Week 0 / 26</span>
             <div class="season-progress">
                 <div class="season-progress-fill" id="seasonProgressFill" style="width: 0%"></div>
             </div>
-            <span id="seasonWeeksLeft">20 weeks left</span>
+            <span id="seasonWeeksLeft">26 weeks left</span>
         </div>
 
         <div class="card">
@@ -1015,14 +1015,14 @@
                 <strong>How it works:</strong> Group A and Group B alternate each week. Subs can fill in for anyone who can't make it.
             </div>
 
-            <h3>🔵 Group A — Odd weeks (Mar 31, Apr 14, ...)</h3>
+            <h3>🔵 Group A — Odd weeks (Jan 6, Jan 20, ...)</h3>
             <div class="add-player-form">
                 <input type="text" id="newPlayerA" placeholder="Add to Group A..." onkeypress="if(event.key==='Enter')addRosterPlayer('A')">
                 <button class="btn btn-primary" onclick="addRosterPlayer('A')">Add</button>
             </div>
             <div class="player-grid" id="groupAGrid" style="margin-bottom: 1.5rem;"></div>
 
-            <h3>🟣 Group B — Even weeks (Apr 7, Apr 21, ...)</h3>
+            <h3>🟣 Group B — Even weeks (Jan 13, Jan 27, ...)</h3>
             <div class="add-player-form">
                 <input type="text" id="newPlayerB" placeholder="Add to Group B..." onkeypress="if(event.key==='Enter')addRosterPlayer('B')">
                 <button class="btn btn-primary" onclick="addRosterPlayer('B')">Add</button>
@@ -1097,7 +1097,8 @@
 const STORAGE_KEY = 'padel-tuesdays';
 const SHEETS_API = 'https://script.google.com/macros/s/AKfycbzUx9fK6HddJj8qd8OXSOWqhQaJS9nSDBfh9c3AVGyst6ExS_fgXf-H1gh_ipxCVgfp/exec';
 
-const SEASON_START = new Date('2026-03-31'); // First Tuesday
+const SEASON_START = new Date('2026-01-06'); // First Tuesday — Week 2
+const TOTAL_WEEKS = 26; // Jan 6 (week 2) through Jun 30 (week 27)
 
 // Cache for loaded data to avoid constant fetches
 let _cachedData = null;
@@ -1565,7 +1566,7 @@ function confirmAndGenerate() {
         return;
     }
 
-    if (data.weeks.length >= 20) {
+    if (data.weeks.length >= TOTAL_WEEKS) {
         showToast('Season complete! 🏆');
         return;
     }
@@ -2162,11 +2163,15 @@ function updateLeaderboard() {
     }
 
     const sorted = Object.entries(scores)
-        .map(([name, s]) => ({ name, ...s }))
+        .map(([name, s]) => ({
+            name,
+            ...s,
+            avg: s.weeksPlayed > 0 ? s.games / s.weeksPlayed : 0
+        }))
         .filter(p => p.weeksPlayed > 0)
-        .sort((a, b) => b.games - a.games);
+        .sort((a, b) => b.avg - a.avg || b.games - a.games);
 
-    const maxGames = sorted.length > 0 ? sorted[0].games : 1;
+    const maxAvg = sorted.length > 0 ? sorted[0].avg : 1;
     const completedWeeks = data.weeks.filter(w => w.completed).length;
 
     if (sorted.length === 0 || completedWeeks === 0) {
@@ -2177,13 +2182,13 @@ function updateLeaderboard() {
 
     let html = `<table class="leaderboard-table">
         <thead><tr>
-            <th>#</th><th>Player</th><th>Games Won</th><th>Weeks</th><th></th>
+            <th>#</th><th>Player</th><th>Avg/Week</th><th>Total</th><th>Weeks</th>
         </tr></thead><tbody>`;
 
     sorted.forEach((p, i) => {
         const rankClass = i < 3 ? `rank-${i + 1}` : '';
         const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-        const pct = maxGames > 0 ? (p.games / maxGames * 100) : 0;
+        const pct = maxAvg > 0 ? (p.avg / maxAvg * 100) : 0;
         // Show which group they belong to
         const inA = data.groupA.includes(p.name);
         const inB = data.groupB.includes(p.name);
@@ -2193,11 +2198,11 @@ function updateLeaderboard() {
             <td><span class="rank ${rankClass}">${medal || (i + 1)}</span></td>
             <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${groupTag}</span></td>
             <td>
-                ${p.games}
+                ${p.avg.toFixed(1)}
                 <div class="games-bar"><div class="games-bar-fill" style="width:${pct}%"></div></div>
             </td>
-            <td>${p.weeksPlayed}</td>
-            <td style="font-size:0.8rem;color:var(--text-muted)">${p.weeksPlayed > 0 ? (p.games / p.weeksPlayed).toFixed(1) + '/wk' : '-'}</td>
+            <td style="font-size:0.85rem;color:var(--text-muted)">${p.games}</td>
+            <td style="font-size:0.85rem;color:var(--text-muted)">${p.weeksPlayed}</td>
         </tr>`;
     });
 
@@ -2615,10 +2620,9 @@ function updateSeasonBar() {
     const completed = data.weeks.filter(w => w.completed).length;
     const total = data.weeks.length;
     const displayWeek = total > 0 ? total : 0;
-    const lastWeek = 20;
-    document.getElementById('seasonWeekLabel').textContent = `Week ${displayWeek} / ${lastWeek}`;
-    document.getElementById('seasonProgressFill').style.width = (completed / 20 * 100) + '%';
-    document.getElementById('seasonWeeksLeft').textContent = `${20 - total} weeks left`;
+    document.getElementById('seasonWeekLabel').textContent = `Week ${displayWeek} / ${TOTAL_WEEKS}`;
+    document.getElementById('seasonProgressFill').style.width = (completed / TOTAL_WEEKS * 100) + '%';
+    document.getElementById('seasonWeeksLeft').textContent = `${TOTAL_WEEKS - total} weeks left`;
 }
 
 function showToast(message) {
