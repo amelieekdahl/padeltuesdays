@@ -1150,27 +1150,35 @@ async function _doCloudSave() {
     let success = false;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            // POST with no-cors: browser sends the body, server processes it,
-            // but we get an opaque response (status 0, no body readable).
-            // This is expected — Google Apps Script 302-redirects on POST.
-            await fetch(SHEETS_API, {
+            // POST with redirect:follow — Apps Script 302-redirects on POST.
+            // Using text/plain avoids CORS preflight (simple request).
+            const resp = await fetch(SHEETS_API, {
                 method: 'POST',
-                mode: 'no-cors',
+                redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(dataToSave)
             });
 
-            // Wait for the server to finish writing before verifying.
-            // Apps Script can take a few seconds to process.
-            await new Promise(r => setTimeout(r, 2000 + attempt * 2000));
+            // If we get a JSON response back, check it
+            if (resp.ok) {
+                try {
+                    const result = await resp.json();
+                    if (result && result.ok) {
+                        success = true;
+                        break;
+                    }
+                } catch (_) {
+                    // Response wasn't JSON — verify by reading back
+                }
+            }
 
-            // Verify by reading back — use cache-busting to avoid stale responses
+            // Fallback: verify by reading back
+            await new Promise(r => setTimeout(r, 1500 + attempt * 1500));
             const verify = await fetch(SHEETS_API + '?_t=' + Date.now());
             const cloudData = await verify.json();
 
             if (cloudData && cloudData.weeks !== undefined &&
                 cloudData.weeks.length === dataToSave.weeks.length) {
-                // Check that the latest week data matches (lightweight check)
                 const localLatest = JSON.stringify(dataToSave.weeks[dataToSave.weeks.length - 1] || null);
                 const cloudLatest = JSON.stringify(cloudData.weeks[cloudData.weeks.length - 1] || null);
                 if (localLatest === cloudLatest) {
