@@ -1150,30 +1150,46 @@ async function _doCloudSave() {
     let success = false;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            // POST with redirect:follow — Apps Script 302-redirects on POST.
-            // Using text/plain avoids CORS preflight (simple request).
-            const resp = await fetch(SHEETS_API, {
-                method: 'POST',
-                redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify(dataToSave)
+            // Use Google Apps Script doGet with query params for small saves,
+            // or POST via a hidden form/iframe to handle the 302 redirect.
+            // Apps Script redirects POST to a different origin, which blocks
+            // fetch even with redirect:follow. Using a GET-based approach
+            // with the data as a query parameter works for the tournament JSON.
+            //
+            // Strategy: POST via a temporary <form> targeting a hidden iframe.
+            // The form submission follows redirects natively (no CORS issues).
+            await new Promise((resolve) => {
+                const iframeName = '_cloud_save_' + Date.now();
+                const iframe = document.createElement('iframe');
+                iframe.name = iframeName;
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = SHEETS_API;
+                form.target = iframeName;
+                form.style.display = 'none';
+
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'payload';
+                input.value = JSON.stringify(dataToSave);
+                form.appendChild(input);
+
+                document.body.appendChild(form);
+                form.submit();
+
+                // Clean up after a delay and resolve
+                setTimeout(() => {
+                    try { document.body.removeChild(iframe); } catch(_){}
+                    try { document.body.removeChild(form); } catch(_){}
+                    resolve();
+                }, 3000);
             });
 
-            // If we get a JSON response back, check it
-            if (resp.ok) {
-                try {
-                    const result = await resp.json();
-                    if (result && result.ok) {
-                        success = true;
-                        break;
-                    }
-                } catch (_) {
-                    // Response wasn't JSON — verify by reading back
-                }
-            }
-
-            // Fallback: verify by reading back
-            await new Promise(r => setTimeout(r, 1500 + attempt * 1500));
+            // Verify by reading back
+            await new Promise(r => setTimeout(r, 1000 + attempt * 1500));
             const verify = await fetch(SHEETS_API + '?_t=' + Date.now());
             const cloudData = await verify.json();
 

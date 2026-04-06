@@ -146,7 +146,13 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const body = e.postData ? e.postData.contents : '';
+  // Support both fetch (postData.contents) and form submissions (parameter.payload)
+  let body = '';
+  if (e.postData && e.postData.contents) {
+    body = e.postData.contents;
+  } else if (e.parameter && e.parameter.payload) {
+    body = e.parameter.payload;
+  }
 
   let payload;
   try {
