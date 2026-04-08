@@ -8,7 +8,7 @@ A 26-week season of weekly Tuesday padel matches. Players are split into two gro
 
 ## Architecture
 
-- **Frontend**: Single `index.html` file with inline CSS and JS. No build tools, no framework — pure vanilla.
+- **Frontend**: Split into three files — `index.html` (HTML structure), `styles.css` (all CSS), and `app.js` (all JavaScript). No build tools, no framework — pure vanilla.
 - **Data persistence**: Dual-layer — **localStorage** for instant reads and **Google Sheets** (via Apps Script web app) for shared/cloud persistence. On page load, data is fetched from the cloud and cached locally. All writes go to both localStorage and cloud (async, fire-and-forget with `no-cors`). Every mutation (score entry, match creation, roster change, etc.) calls `saveData()` which persists to both layers.
 - **Backend**: Google Apps Script (`Code.gs`) deployed as a web app. It stores tournament data as a JSON blob in a "Data" sheet (cell A1) and photo gallery data in a "Gallery" sheet (one row per photo with columns: id, caption, date, filename, base64 data). Supports `doGet` and `doPost` with action-based routing.
 
