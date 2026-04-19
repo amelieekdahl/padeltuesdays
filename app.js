@@ -54,14 +54,10 @@ async function _doCloudSave() {
     let success = false;
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            // Use Google Apps Script doGet with query params for small saves,
-            // or POST via a hidden form/iframe to handle the 302 redirect.
-            // Apps Script redirects POST to a different origin, which blocks
-            // fetch even with redirect:follow. Using a GET-based approach
-            // with the data as a query parameter works for the tournament JSON.
-            //
             // Strategy: POST via a temporary <form> targeting a hidden iframe.
-            // The form submission follows redirects natively (no CORS issues).
+            // Apps Script redirects POST to a different origin, which blocks
+            // fetch even with redirect:follow. The form submission follows
+            // redirects natively (no CORS issues).
             await new Promise((resolve) => {
                 const iframeName = '_cloud_save_' + Date.now();
                 const iframe = document.createElement('iframe');
@@ -92,9 +88,9 @@ async function _doCloudSave() {
                 }, 3000);
             });
 
-            // Verify by reading back
-            await new Promise(r => setTimeout(r, 1000 + attempt * 1500));
-            const verify = await fetch(SHEETS_API + '?_t=' + Date.now());
+            // Verify by reading back (with cache-busting)
+            await new Promise(r => setTimeout(r, 1500 + attempt * 2000));
+            const verify = await fetch(SHEETS_API + '?_t=' + Date.now(), { cache: 'no-store' });
             const cloudData = await verify.json();
 
             if (cloudData && cloudData.weeks !== undefined &&
@@ -124,9 +120,18 @@ async function loadFromCloud() {
     updateSyncIndicator('loading');
     try {
         // Cache-bust to get fresh data
-        const res = await fetch(SHEETS_API + '?_t=' + Date.now());
-        const data = await res.json();
+        const res = await fetch(SHEETS_API + '?_t=' + Date.now(), { cache: 'no-store' });
+        const text = await res.text();
+        // Handle chunked or empty responses
+        if (!text || text.trim() === '' || text.trim() === '{}') {
+            console.warn('Cloud returned empty data, using localStorage');
+            _dataLoaded = true;
+            updateSyncIndicator('offline');
+            return loadData();
+        }
+        const data = JSON.parse(text);
         if (data && data.groupA !== undefined) {
+            // Cloud data wins — overwrite localStorage
             _cachedData = data;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             _dataLoaded = true;
@@ -174,7 +179,13 @@ window.addEventListener('beforeunload', () => {
 // Load from cloud on page load, THEN init (to avoid overwriting cloud data)
 loadFromCloud().then(data => {
     _cachedData = data;
+    _dataLoaded = true;
     init();
+    // Force re-render the active section to show fresh cloud data
+    populateWeekSelect();
+    loadWeek();
+    updateSeasonBar();
+    updateLeaderboard();
 });
 
 // Get all known players across all groups
@@ -2088,4 +2099,5 @@ function init(skipCloudSave) {
     // Gallery & slideshow are loaded async from cloud via refreshGalleryCache()
 }
 
-init();
+// Don't call init() immediately — wait for cloud data.
+// The loadFromCloud().then(...) at the top handles the initial render.
