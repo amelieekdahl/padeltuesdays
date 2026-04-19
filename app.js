@@ -1090,43 +1090,43 @@ function updateLeaderboard() {
         }
     }
 
-    const sorted = Object.entries(scores)
-        .map(([name, s]) => ({
-            name,
-            ...s,
-            avg: s.weeksPlayed > 0 ? s.games / s.weeksPlayed : 0
-        }))
-        .filter(p => p.weeksPlayed > 0)
-        .sort((a, b) => b.avg - a.avg || b.games - a.games);
-
-    const maxAvg = sorted.length > 0 ? sorted[0].avg : 1;
     const completedWeeks = data.weeks.filter(w => w.completed).length;
 
-    if (sorted.length === 0 || completedWeeks === 0) {
+    // Classify each player
+    const allEntries = Object.entries(scores)
+        .map(([name, s]) => {
+            const inA = data.groupA.includes(name);
+            const inB = data.groupB.includes(name);
+            const inSubs = data.subs.includes(name);
+            const groupTag = inA && inB ? 'A+B' : inA ? 'A' : inB ? 'B' : inSubs ? 'Sub' : 'Fill-in';
+            const isSubOrFillIn = groupTag === 'Sub' || groupTag === 'Fill-in';
+            return { name, ...s, avg: s.weeksPlayed > 0 ? s.games / s.weeksPlayed : 0, groupTag, isSubOrFillIn };
+        })
+        .filter(p => p.weeksPlayed > 0);
+
+    const regulars = allEntries.filter(p => !p.isSubOrFillIn).sort((a, b) => b.avg - a.avg || b.games - a.games);
+    const subs = allEntries.filter(p => p.isSubOrFillIn).sort((a, b) => b.avg - a.avg || b.games - a.games);
+
+    if ((regulars.length === 0 && subs.length === 0) || completedWeeks === 0) {
         document.getElementById('leaderboardContent').innerHTML = `
             <div class="empty-state"><div class="emoji">📊</div><p>No scores recorded yet.</p></div>`;
         return;
     }
+
+    const maxAvg = regulars.length > 0 ? regulars[0].avg : 1;
 
     let html = `<table class="leaderboard-table">
         <thead><tr>
             <th>#</th><th>Player</th><th>Avg/Week</th><th>Total</th><th>Weeks</th>
         </tr></thead><tbody>`;
 
-    sorted.forEach((p, i) => {
+    regulars.forEach((p, i) => {
         const rankClass = i < 3 ? `rank-${i + 1}` : '';
         const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
         const pct = maxAvg > 0 ? (p.avg / maxAvg * 100) : 0;
-        // Show which group they belong to
-        const inA = data.groupA.includes(p.name);
-        const inB = data.groupB.includes(p.name);
-        const inSubs = data.subs.includes(p.name);
-        const groupTag = inA && inB ? 'A+B' : inA ? 'A' : inB ? 'B' : inSubs ? 'Sub' : 'Fill-in';
-        const isSubOrFillIn = groupTag === 'Sub' || groupTag === 'Fill-in';
-        const rowStyle = isSubOrFillIn ? 'opacity:0.4;' : '';
-        html += `<tr style="${rowStyle}">
+        html += `<tr>
             <td><span class="rank ${rankClass}">${medal || (i + 1)}</span></td>
-            <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${groupTag}</span></td>
+            <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${p.groupTag}</span></td>
             <td>
                 ${p.avg.toFixed(1)}
                 <div class="games-bar"><div class="games-bar-fill" style="width:${pct}%"></div></div>
@@ -1137,6 +1137,31 @@ function updateLeaderboard() {
     });
 
     html += '</tbody></table>';
+
+    // Subs/fill-ins in a separate section below
+    if (subs.length > 0) {
+        html += `<div style="margin-top:1.5rem;">
+            <h3 style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">🟠 Substitute Appearances</h3>
+            <table class="leaderboard-table" style="opacity:0.6;">
+            <thead><tr>
+                <th>#</th><th>Player</th><th>Avg/Week</th><th>Total</th><th>Weeks</th>
+            </tr></thead><tbody>`;
+        subs.forEach((p, i) => {
+            const pct = maxAvg > 0 ? (p.avg / maxAvg * 100) : 0;
+            html += `<tr>
+                <td><span class="rank">${i + 1}</span></td>
+                <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${p.groupTag}</span></td>
+                <td>
+                    ${p.avg.toFixed(1)}
+                    <div class="games-bar"><div class="games-bar-fill" style="width:${pct}%"></div></div>
+                </td>
+                <td style="font-size:0.85rem;color:var(--text-muted)">${p.games}</td>
+                <td style="font-size:0.85rem;color:var(--text-muted)">${p.weeksPlayed}</td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
     document.getElementById('leaderboardContent').innerHTML = html;
 }
 
