@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'padel-tuesdays';
 const SHEETS_API = 'https://script.google.com/macros/s/AKfycbzUx9fK6HddJj8qd8OXSOWqhQaJS9nSDBfh9c3AVGyst6ExS_fgXf-H1gh_ipxCVgfp/exec';
 
-const SEASON_START = new Date('2026-01-06'); // First Tuesday — Week 2
+const SEASON_START = new Date('2026-01-06T00:00:00'); // First Tuesday — Week 2
 const TOTAL_WEEKS = 26; // Jan 6 (week 2) through Jun 30 (week 27)
 
 // Cache for loaded data to avoid constant fetches
