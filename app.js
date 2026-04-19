@@ -180,6 +180,26 @@ window.addEventListener('beforeunload', () => {
 loadFromCloud().then(data => {
     _cachedData = data;
     _dataLoaded = true;
+
+    // Migrate: fix any stored dates that are off by one day (Monday instead of Tuesday)
+    // SEASON_START is a Tuesday, so all week dates should be Tuesdays
+    let migrated = false;
+    if (data.weeks && data.weeks.length > 0) {
+        for (const week of data.weeks) {
+            if (!week.date) continue;
+            const d = new Date(week.date + 'T12:00:00'); // parse at noon to avoid TZ issues
+            if (d.getDay() === 1) { // Monday = 1, should be Tuesday = 2
+                d.setDate(d.getDate() + 1);
+                week.date = toLocalDateString(d);
+                migrated = true;
+            }
+        }
+        if (migrated) {
+            saveData(data);
+            console.log('Migrated week dates from Monday to Tuesday');
+        }
+    }
+
     init();
     // Force re-render the active section to show fresh cloud data
     populateWeekSelect();
@@ -224,6 +244,14 @@ function getWeekDate(weekNum) {
     const d = new Date(SEASON_START);
     d.setDate(d.getDate() + (weekNum - 1) * 7);
     return d;
+}
+
+// Format a Date object to local YYYY-MM-DD string (avoids UTC shift)
+function toLocalDateString(d) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 function formatDate(d) {
@@ -534,7 +562,7 @@ function confirmAndGenerate() {
 
     const week = {
         number: weekNum,
-        date: weekDate.toISOString().split('T')[0],
+        date: toLocalDateString(weekDate),
         group: defaultGroup,
         roster: [...roster],
         subs: subNames,
@@ -1296,7 +1324,7 @@ function buildMatchFormHtml(data, week) {
     const hasSecond = week && week.secondHalf;
 
     // Default date: next available Tuesday
-    const defaultDate = week ? week.date : new Date().toISOString().split('T')[0];
+    const defaultDate = week ? week.date : toLocalDateString(new Date());
     const defaultGroup = week ? week.group : 'A';
 
     // First half courts
@@ -1899,7 +1927,7 @@ function processFiles(files) {
                     id: Date.now() + '_' + Math.random().toString(36).slice(2, 8),
                     data: resizedDataUrl,
                     caption: '',
-                    date: new Date().toISOString().split('T')[0],
+                    date: toLocalDateString(new Date()),
                     filename: file.name
                 };
 
