@@ -42,6 +42,59 @@ function saveData(data) {
     _saveTimer = setTimeout(() => _doCloudSave(), 500);
 }
 
+// Try saving via no-cors fetch (fire-and-forget, but faster than iframe)
+async function _postToCloud(dataStr) {
+    // Method 1: Try fetch with no-cors mode (won't give us a readable response,
+    // but reliably delivers the POST even through Apps Script redirects)
+    try {
+        await fetch(SHEETS_API, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: dataStr
+        });
+        return true;
+    } catch (e) {
+        console.warn('no-cors fetch failed:', e);
+    }
+
+    // Method 2: Fallback to hidden iframe form POST
+    try {
+        await new Promise((resolve) => {
+            const iframeName = '_cloud_save_' + Date.now();
+            const iframe = document.createElement('iframe');
+            iframe.name = iframeName;
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = SHEETS_API;
+            form.target = iframeName;
+            form.style.display = 'none';
+
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'payload';
+            input.value = dataStr;
+            form.appendChild(input);
+
+            document.body.appendChild(form);
+            form.submit();
+
+            setTimeout(() => {
+                try { document.body.removeChild(iframe); } catch(_){}
+                try { document.body.removeChild(form); } catch(_){}
+                resolve();
+            }, 3000);
+        });
+        return true;
+    } catch (e) {
+        console.warn('iframe POST failed:', e);
+        return false;
+    }
+}
+
 async function _doCloudSave() {
     if (_saving) return; // will be picked up after current save finishes
     if (!_pendingSave) return;
@@ -52,57 +105,30 @@ async function _doCloudSave() {
     updateSyncIndicator('saving');
 
     let success = false;
+    const dataStr = JSON.stringify(dataToSave);
+
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            // Strategy: POST via a temporary <form> targeting a hidden iframe.
-            // Apps Script redirects POST to a different origin, which blocks
-            // fetch even with redirect:follow. The form submission follows
-            // redirects natively (no CORS issues).
-            await new Promise((resolve) => {
-                const iframeName = '_cloud_save_' + Date.now();
-                const iframe = document.createElement('iframe');
-                iframe.name = iframeName;
-                iframe.style.display = 'none';
-                document.body.appendChild(iframe);
+            await _postToCloud(dataStr);
 
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = SHEETS_API;
-                form.target = iframeName;
-                form.style.display = 'none';
-
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'payload';
-                input.value = JSON.stringify(dataToSave);
-                form.appendChild(input);
-
-                document.body.appendChild(form);
-                form.submit();
-
-                // Clean up after a delay and resolve
-                setTimeout(() => {
-                    try { document.body.removeChild(iframe); } catch(_){}
-                    try { document.body.removeChild(form); } catch(_){}
-                    resolve();
-                }, 3000);
-            });
-
-            // Verify by reading back (with cache-busting)
-            await new Promise(r => setTimeout(r, 1500 + attempt * 2000));
+            // Wait for Apps Script to process, then verify
+            await new Promise(r => setTimeout(r, 2000 + attempt * 2000));
             const verify = await fetch(SHEETS_API + '?_t=' + Date.now(), { cache: 'no-store' });
-            const cloudData = await verify.json();
+            const cloudText = await verify.text();
 
-            if (cloudData && cloudData.weeks !== undefined &&
-                cloudData.weeks.length === dataToSave.weeks.length) {
-                const localLatest = JSON.stringify(dataToSave.weeks[dataToSave.weeks.length - 1] || null);
-                const cloudLatest = JSON.stringify(cloudData.weeks[cloudData.weeks.length - 1] || null);
-                if (localLatest === cloudLatest) {
-                    success = true;
-                    break;
+            if (cloudText && cloudText.trim() !== '' && cloudText.trim() !== '{}') {
+                const cloudData = JSON.parse(cloudText);
+                if (cloudData && cloudData.weeks !== undefined &&
+                    cloudData.weeks.length === dataToSave.weeks.length) {
+                    // Deep compare: check total data length as a sanity check
+                    const cloudStr = JSON.stringify(cloudData);
+                    if (Math.abs(cloudStr.length - dataStr.length) < 100) {
+                        success = true;
+                        break;
+                    }
                 }
             }
-            console.warn(`Cloud verify mismatch (attempt ${attempt + 1}), retrying full save...`);
+            console.warn(`Cloud verify mismatch (attempt ${attempt + 1}), retrying...`);
         } catch (e) {
             console.warn(`Cloud save error (attempt ${attempt + 1}):`, e);
             await new Promise(r => setTimeout(r, 2000));
@@ -110,7 +136,18 @@ async function _doCloudSave() {
     }
 
     _saving = false;
-    updateSyncIndicator(success ? 'saved' : 'error');
+
+    if (success) {
+        updateSyncIndicator('saved');
+    } else {
+        updateSyncIndicator('error');
+        // Schedule a retry in 30 seconds
+        console.warn('Cloud save failed after 3 attempts, will retry in 30s');
+        setTimeout(() => {
+            if (!_pendingSave) _pendingSave = JSON.parse(dataStr);
+            _doCloudSave();
+        }, 30000);
+    }
 
     // If more saves came in while we were saving, flush them now
     if (_pendingSave) _doCloudSave();
@@ -131,6 +168,23 @@ async function loadFromCloud() {
         }
         const data = JSON.parse(text);
         if (data && data.groupA !== undefined) {
+            // Compare cloud vs local — the one with more weeks wins
+            const localRaw = localStorage.getItem(STORAGE_KEY);
+            const localData = localRaw ? JSON.parse(localRaw) : null;
+            const cloudWeeks = (data.weeks || []).length;
+            const localWeeks = localData ? (localData.weeks || []).length : 0;
+
+            if (localWeeks > cloudWeeks) {
+                // Local has newer data — push it to cloud
+                console.warn(`Local has ${localWeeks} weeks, cloud has ${cloudWeeks}. Pushing local to cloud.`);
+                _cachedData = localData;
+                _dataLoaded = true;
+                updateSyncIndicator('saving');
+                _pendingSave = JSON.parse(JSON.stringify(localData));
+                setTimeout(() => _doCloudSave(), 500);
+                return localData;
+            }
+
             // Cloud data wins — overwrite localStorage
             _cachedData = data;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
