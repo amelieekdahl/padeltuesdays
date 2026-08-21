@@ -853,3 +853,162 @@ input { flex: 1; }
 }
 
 .info-box.info { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.25); color: var(--blue); }
+
+/* ==================== SEASON SCHEDULE ==================== */
+.schedule-table-wrap {
+    overflow-x: auto;
+    margin-bottom: 0.5rem;
+}
+
+.schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.schedule-table th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.schedule-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.schedule-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.sched-row-locked td { opacity: 0.65; }
+.sched-row-next td { background: rgba(245,197,66,0.04); }
+.sched-row-next td:first-child { border-left: 3px solid var(--accent); }
+
+.sched-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.sched-slot-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.sched-slot-select {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.78rem;
+    width: 95px;
+    border-radius: 6px;
+}
+
+.sched-slot-select.is-sub {
+    border-color: rgba(251,146,60,0.5);
+    color: var(--orange);
+}
+
+.sched-slot-text {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.78rem;
+    width: 90px;
+    border-radius: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+}
+
+.sched-slot-text.is-sub {
+    border-color: rgba(251,146,60,0.5);
+    color: var(--orange);
+}
+
+.sched-slot-text:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sched-clear-btn {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 0.1rem 0.2rem;
+    transition: color 0.2s;
+}
+
+.sched-clear-btn:hover { color: var(--red); }
+
+.sched-player-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.sched-player-chip {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 0.78rem;
+    color: var(--text);
+}
+
+.sched-player-chip.is-sub {
+    border-color: rgba(251,146,60,0.4);
+    color: var(--orange);
+}
+
+.sched-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.sched-done { background: rgba(74,222,128,0.15); color: var(--green); }
+.sched-active { background: rgba(245,197,66,0.15); color: var(--accent); }
+.sched-next { background: rgba(245,197,66,0.25); color: var(--accent); border: 1px solid rgba(245,197,66,0.4); }
+.sched-planned { background: var(--surface2); color: var(--text-muted); }
+
+.sched-create-btn {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* ==================== LAST SEASON BLOCK ==================== */
+.last-season-block {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.last-season-header {
+    padding: 0.75rem 1rem;
+    background: var(--surface2);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.last-season-header:hover { background: var(--border); color: var(--text); }
+
+.last-season-body { padding: 1rem; display: none; }
+.last-season-body.open { display: block; }

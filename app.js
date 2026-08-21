@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'padel-tuesdays';
 const SHEETS_API = 'https://script.google.com/macros/s/AKfycbzUx9fK6HddJj8qd8OXSOWqhQaJS9nSDBfh9c3AVGyst6ExS_fgXf-H1gh_ipxCVgfp/exec';
 
-const SEASON_START = new Date('2026-01-06T00:00:00'); // First Tuesday — Week 2
-const TOTAL_WEEKS = 26; // Jan 6 (week 2) through Jun 30 (week 27)
+const SEASON_START = new Date('2026-08-18T00:00:00'); // Season 2 — first Tuesday
+const TOTAL_WEEKS = 19; // Aug 18 → Dec 22 2026
 
 // Cache for loaded data to avoid constant fetches
 let _cachedData = null;
@@ -289,9 +289,22 @@ function getNextWeekNumber(data) {
     return data.weeks.length + 1;
 }
 
+function getISOWeekNumber(d) {
+    // Returns the ISO 8601 calendar week number for a given date
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayOfWeek = date.getUTCDay() || 7; // Mon=1 … Sun=7
+    date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek); // nearest Thursday
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
 function getDefaultGroupForWeek(weekNum) {
-    // Odd weeks = Group A, Even weeks = Group B
-    return weekNum % 2 === 1 ? 'A' : 'B';
+    // Use the ISO calendar week of the actual match date to determine group.
+    // Even calendar week → Group B (Monica & Amelie), Odd → Group A (Sara C & Ida).
+    // Aug 18 2026 = ISO week 34 (even) → Group B plays first.
+    const matchDate = getWeekDate(weekNum);
+    const isoWeek = getISOWeekNumber(matchDate);
+    return isoWeek % 2 === 0 ? 'B' : 'A';
 }
 
 function getWeekDate(weekNum) {
@@ -379,7 +392,277 @@ function removeRosterPlayer(group, index) {
     showToast(`${name} removed`);
 }
 
-// ==================== NEXT WEEK PLANNER ====================
+// ==================== SEASON SCHEDULE ====================
+async function refreshAndRenderSchedule() {
+    // Show a brief loading state so it's clear a refresh is happening
+    const container = document.getElementById('scheduleContent');
+    if (container) container.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">☁️ Refreshing...</div>';
+
+    // Re-fetch from cloud so cross-device edits (e.g. a sub added on another phone) are visible
+    const fresh = await loadFromCloud();
+    _cachedData = fresh;
+
+    renderSchedule();
+}
+
+function renderSchedule() {
+    const data = loadData();
+    const container = document.getElementById('scheduleContent');
+    const allKnownPlayers = [...new Set([...data.groupA, ...data.groupB, ...data.subs])];
+
+    // Ensure scheduleWeeks array exists
+    if (!data.scheduleWeeks) data.scheduleWeeks = [];
+
+    // Rebuild all TOTAL_WEEKS entries — always recalculate default players for
+    // unlocked weeks so parity changes take effect immediately
+    for (let i = 0; i < TOTAL_WEEKS; i++) {
+        const weekNum = i + 1;
+        const defaultGroup = getDefaultGroupForWeek(weekNum);
+        const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
+        const locked = !!(data.weeks[i]);
+
+        if (!data.scheduleWeeks[i]) {
+            // New entry — seed from default roster, not yet customised
+            data.scheduleWeeks[i] = { players: [...defaultPlayers], locked, customised: false };
+        } else {
+            data.scheduleWeeks[i].locked = locked;
+            // Only auto-reseed if the user hasn't manually edited this week
+            if (!locked && !data.scheduleWeeks[i].customised) {
+                data.scheduleWeeks[i].players = [...defaultPlayers];
+            }
+        }
+    }
+
+    saveData(data);
+
+    let html = `
+        <div class="info-box info" style="margin-bottom:1.25rem;">
+            <strong>Season schedule</strong> — All 19 weeks listed with who's playing. Change a player in any week to set a backup before matches are generated.
+            Weeks that already have matches generated are locked 🔒.
+        </div>
+        <div class="schedule-table-wrap">
+        <table class="schedule-table">
+            <thead><tr>
+                <th style="width:60px">#</th>
+                <th style="width:90px">Date</th>
+                <th style="width:60px">Group</th>
+                <th>Players (8)</th>
+                <th style="width:70px">Status</th>
+            </tr></thead>
+            <tbody>`;
+
+    for (let i = 0; i < TOTAL_WEEKS; i++) {
+        const weekNum = i + 1;
+        const weekDate = getWeekDate(weekNum);
+        const defaultGroup = getDefaultGroupForWeek(weekNum);
+        const groupLabel = defaultGroup === 'A' ? '🔵 A' : '🟣 B';
+        const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
+        const sw = data.scheduleWeeks[i];
+        const locked = sw.locked;
+        const players = sw.players || [...defaultPlayers];
+        const isCurrentWeek = (data.weeks.length === i); // next to be generated
+
+        // Status
+        let statusBadge;
+        if (locked) {
+            const matchWeek = data.weeks[i];
+            statusBadge = matchWeek && matchWeek.completed
+                ? '<span class="sched-badge sched-done">✅ Done</span>'
+                : '<span class="sched-badge sched-active">⏳ Active</span>';
+        } else if (isCurrentWeek) {
+            const filledCount = (sw.players || []).filter(p => p && p !== '' && p !== '\u200b').length;
+            const ready = filledCount === 8;
+            statusBadge = `<button class="btn btn-primary sched-create-btn" onclick="generateFromSchedule()" ${ready ? '' : 'disabled'} title="${ready ? 'Generate matches for week ' + weekNum : 'Need 8 players'}">🎲 Create matches</button>`;
+        } else {
+            statusBadge = '<span class="sched-badge sched-planned">Planned</span>';
+        }
+
+        html += `<tr class="${locked ? 'sched-row-locked' : ''} ${isCurrentWeek ? 'sched-row-next' : ''}">
+            <td style="font-weight:700;color:var(--accent)">${weekNum}</td>
+            <td style="font-size:0.85rem;color:var(--text-muted)">${formatDate(weekDate)}</td>
+            <td><span class="group-indicator group-${defaultGroup.toLowerCase()}" style="padding:0.2rem 0.5rem;font-size:0.7rem;">${groupLabel}</span></td>
+            <td>`;
+
+        if (locked) {
+            // Show players as read-only chips
+            html += `<div class="sched-player-list">${players.filter(p => p && p !== '\u200b').map(p => {
+                const isSub = !defaultPlayers.includes(p);
+                return `<span class="sched-player-chip ${isSub ? 'is-sub' : ''}">${p}</span>`;
+            }).join('')}</div>`;
+        } else {
+            // 8 editable slots — dropdown + free-text override
+            const otherGroup = defaultGroup === 'A' ? data.groupB : data.groupA;
+            const otherLabel2 = defaultGroup === 'A' ? 'Group B' : 'Group A';
+            const otherOnly = [...new Set(otherGroup)].filter(p => !defaultPlayers.includes(p));
+            const subsOnly = data.subs.filter(p => !defaultPlayers.includes(p) && !otherOnly.includes(p));
+
+            html += `<div class="sched-slots">`;
+            for (let s = 0; s < 8; s++) {
+                const current = players[s] || '';
+                const isSub = current && !defaultPlayers.includes(current);
+
+                // Use text input if value isn't a known player name (includes the sentinel \u200b)
+                const allKnown = [...defaultPlayers, ...otherOnly, ...subsOnly];
+                const useTextInput = current && !allKnown.includes(current);
+                const displayValue = current === '\u200b' ? '' : current;
+
+                html += `<div class="sched-slot-wrap">`;
+
+                if (useTextInput) {
+                    // Show text input (custom sub name typed in)
+                    html += `<input type="text" class="sched-slot-text is-sub"
+                        value="${displayValue}"
+                        placeholder="Sub name..."
+                        onchange="updateScheduleSlot(${i}, ${s}, this.value)"
+                        onblur="updateScheduleSlot(${i}, ${s}, this.value)"
+                        title="Type a substitute name or clear to use dropdown">`;
+                    html += `<span class="sched-clear-btn" onclick="updateScheduleSlot(${i}, ${s}, '')" title="Switch back to dropdown">✕</span>`;
+                } else {
+                    const groupLabel2 = defaultGroup === 'A' ? 'Group A' : 'Group B';
+                    html += `<select class="sched-slot-select ${isSub ? 'is-sub' : ''}"
+                        onchange="scheduleSlotChange(${i}, ${s}, this)"
+                        title="Slot ${s + 1}">
+                        <option value="">—</option>`;
+
+                    html += `<optgroup label="${groupLabel2}">`;
+                    for (const p of defaultPlayers) {
+                        const alreadyUsed = p !== current && players.includes(p);
+                        html += `<option value="${p}" ${p === current ? 'selected' : ''} ${alreadyUsed ? 'disabled' : ''}>${p}</option>`;
+                    }
+                    html += `</optgroup>`;
+
+                    if (otherOnly.length > 0) {
+                        html += `<optgroup label="${otherLabel2}">`;
+                        for (const p of otherOnly) {
+                            const alreadyUsed = p !== current && players.includes(p);
+                            html += `<option value="${p}" ${p === current ? 'selected' : ''} ${alreadyUsed ? 'disabled' : ''}>${p}</option>`;
+                        }
+                        html += `</optgroup>`;
+                    }
+
+                    if (subsOnly.length > 0) {
+                        html += `<optgroup label="Subs">`;
+                        for (const p of subsOnly) {
+                            const alreadyUsed = p !== current && players.includes(p);
+                            html += `<option value="${p}" ${p === current ? 'selected' : ''} ${alreadyUsed ? 'disabled' : ''}>${p}</option>`;
+                        }
+                        html += `</optgroup>`;
+                    }
+
+                    html += `<optgroup label="Other"><option value="__type__">✏️ Type a name...</option></optgroup>`;
+                    html += `</select>`;
+                }
+
+                html += `</div>`;
+            }
+            html += `</div>`;
+            html += `<button class="btn btn-secondary" style="padding:0.2rem 0.5rem;font-size:0.7rem;margin-top:0.3rem;" onclick="resetScheduleWeek(${i})">↺ Default</button>`;
+        }
+
+        html += `</td>
+            <td>${statusBadge}</td>
+        </tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+
+    if (data.weeks.length >= TOTAL_WEEKS) {
+        html += `<p style="color:var(--green);font-weight:600;margin-top:1rem;">🏆 Season complete!</p>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function scheduleSlotChange(weekIdx, slotIdx, selectEl) {
+    if (selectEl.value === '__type__') {
+        // Switch slot to free-text mode with an empty value — re-render will show text input
+        updateScheduleSlot(weekIdx, slotIdx, '__typing__');
+    } else {
+        updateScheduleSlot(weekIdx, slotIdx, selectEl.value);
+    }
+}
+
+function updateScheduleSlot(weekIdx, slotIdx, value) {
+    const data = loadData();
+    if (!data.scheduleWeeks) return;
+    if (!data.scheduleWeeks[weekIdx].players) {
+        const defaultGroup = getDefaultGroupForWeek(weekIdx + 1);
+        data.scheduleWeeks[weekIdx].players = [...(defaultGroup === 'A' ? data.groupA : data.groupB)];
+    }
+    while (data.scheduleWeeks[weekIdx].players.length < 8) data.scheduleWeeks[weekIdx].players.push('');
+    // __typing__ is a sentinel: store zwsp so re-render shows blank text input
+    data.scheduleWeeks[weekIdx].players[slotIdx] = value === '__typing__' ? '\u200b' : value;
+    data.scheduleWeeks[weekIdx].customised = true; // preserve against auto-reseed
+    saveData(data);
+    renderSchedule();
+}
+
+function resetScheduleWeek(weekIdx) {
+    const data = loadData();
+    const defaultGroup = getDefaultGroupForWeek(weekIdx + 1);
+    const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
+    if (!data.scheduleWeeks) data.scheduleWeeks = [];
+    while (data.scheduleWeeks.length <= weekIdx) data.scheduleWeeks.push({ players: [], locked: false });
+    data.scheduleWeeks[weekIdx].players = [...defaultPlayers];
+    data.scheduleWeeks[weekIdx].customised = false; // allow auto-reseed again
+    saveData(data);
+    renderSchedule();
+    showToast('Reset to default roster 🔄');
+}
+
+function generateFromSchedule() {
+    const data = loadData();
+    const nextIdx = data.weeks.length;
+    if (nextIdx >= TOTAL_WEEKS) { showToast('Season complete! 🏆'); return; }
+
+    const sw = data.scheduleWeeks[nextIdx];
+    const roster = (sw.players || []).filter(p => p && p !== '' && p !== '\u200b');
+    if (roster.length !== 8) { showToast(`Need exactly 8 players (have ${roster.length})`); return; }
+
+    const weekNum = nextIdx + 1;
+    const weekDate = getWeekDate(weekNum);
+    const defaultGroup = getDefaultGroupForWeek(weekNum);
+    const defaultPlayers = defaultGroup === 'A' ? data.groupA : data.groupB;
+    const subNames = roster.filter(p => !defaultPlayers.includes(p));
+
+    const pairs = generatePairings(roster, data.pairingHistory);
+    const courts = assignCourts(pairs);
+    for (const pair of pairs) data.pairingHistory.push(pair);
+
+    const playlists = data.playlists || [];
+    const playlistUri = playlists.length > 0 ? playlists[(weekNum - 1) % playlists.length] : null;
+
+    const week = {
+        number: weekNum,
+        date: toLocalDateString(weekDate),
+        group: defaultGroup,
+        roster: [...roster],
+        subs: subNames,
+        playlistUri,
+        firstHalf: {
+            court1: { teamA: courts.court1.teamA, teamB: courts.court1.teamB, scoreA: null, scoreB: null },
+            court2: { teamA: courts.court2.teamA, teamB: courts.court2.teamB, scoreA: null, scoreB: null }
+        },
+        secondHalf: null,
+        completed: false
+    };
+
+    data.weeks.push(week);
+    data.scheduleWeeks[nextIdx].locked = true;
+    data.nextWeekRoster = null;
+    data._nextWeekGroup = null;
+    data.nextWeekPlaylistIndex = null;
+    saveData(data);
+
+    showSection('matchday');
+    populateWeekSelect();
+    document.getElementById('weekSelect').value = weekNum - 1;
+    loadWeek();
+    updateSeasonBar();
+    showToast(`Week ${weekNum} generated! 🎲`);
+}
+
+// ==================== NEXT WEEK PLANNER (legacy — kept for compatibility) ====================
 function renderNextWeek() {
     const data = loadData();
     const weekNum = getNextWeekNumber(data);
@@ -820,6 +1103,9 @@ function loadWeek() {
         html += '<span style="color: var(--green); font-weight: 600;">✅ Week completed!</span>';
         html += ' <button class="btn btn-secondary" style="margin-left:0.5rem;padding:0.3rem 0.8rem;font-size:0.8rem;" onclick="reopenWeek(' + weekIndex + ')">🔓 Reopen</button>';
     }
+    if (!week.completed) {
+        html += '<button class="btn btn-danger" style="padding:0.3rem 0.8rem;font-size:0.8rem;margin-left:auto;" onclick="ungenerateWeek(' + weekIndex + ')">↩ Ungenerate</button>';
+    }
     html += '</div>';
 
     // Spotify
@@ -1142,6 +1428,102 @@ function reopenWeek(weekIndex) {
 }
 
 // ==================== LEADERBOARD ====================
+
+function saveAsLastSeason() {
+    const data = loadData();
+    const allPlayers = getAllPlayers(data);
+    const scores = {};
+
+    for (const p of allPlayers) scores[p] = { games: 0, weeksPlayed: 0 };
+
+    for (const week of data.weeks) {
+        if (!week.completed) continue;
+        const weekPlayers = new Set();
+        const halves = [week.firstHalf];
+        if (week.secondHalf) halves.push(week.secondHalf);
+        for (const half of halves) {
+            for (const courtKey of Object.keys(half)) {
+                const court = half[courtKey];
+                if (court.scoreA !== null) {
+                    for (const p of court.teamA) {
+                        if (!scores[p]) scores[p] = { games: 0, weeksPlayed: 0 };
+                        scores[p].games += court.scoreA;
+                        weekPlayers.add(p);
+                    }
+                }
+                if (court.scoreB !== null) {
+                    for (const p of court.teamB) {
+                        if (!scores[p]) scores[p] = { games: 0, weeksPlayed: 0 };
+                        scores[p].games += court.scoreB;
+                        weekPlayers.add(p);
+                    }
+                }
+            }
+        }
+        for (const p of weekPlayers) scores[p].weeksPlayed++;
+    }
+
+    const standings = Object.entries(scores)
+        .map(([name, s]) => {
+            const inA = data.groupA.includes(name);
+            const inB = data.groupB.includes(name);
+            const inSubs = data.subs.includes(name);
+            const groupTag = inA && inB ? 'A+B' : inA ? 'A' : inB ? 'B' : inSubs ? 'Sub' : 'Fill-in';
+            const isSubOrFillIn = groupTag === 'Sub' || groupTag === 'Fill-in';
+            return { name, ...s, avg: s.weeksPlayed > 0 ? s.games / s.weeksPlayed : 0, groupTag, isSubOrFillIn };
+        })
+        .filter(p => p.weeksPlayed > 0 && !p.isSubOrFillIn)  // regulars only
+        .sort((a, b) => b.avg - a.avg || b.games - a.games);
+
+    if (standings.length === 0) {
+        showToast('No completed weeks to archive yet.');
+        return;
+    }
+
+    if (!confirm(`Archive the current ${standings.length}-player standings as "Last Season"? This replaces any previously archived standings.`)) return;
+
+    data.lastSeasonStandings = standings;
+    saveData(data);
+    updateLeaderboard();
+    showToast('Standings archived as Last Season 📦');
+}
+
+function renderLastSeasonStandings(data) {
+    if (!data.lastSeasonStandings || data.lastSeasonStandings.length === 0) return '';
+
+    const maxAvg = data.lastSeasonStandings[0] ? data.lastSeasonStandings[0].avg : 1;
+    let html = `
+        <div class="last-season-block">
+            <div class="last-season-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                <span>🏆 Last Season — 2026 (Weeks 1–26)</span>
+                <span>▼</span>
+            </div>
+            <div class="last-season-body">
+                <table class="leaderboard-table" style="opacity:0.85;">
+                <thead><tr>
+                    <th>#</th><th>Player</th><th>Avg/Week</th><th>Total</th><th>Weeks</th>
+                </tr></thead><tbody>`;
+
+    data.lastSeasonStandings.forEach((p, i) => {
+        const rankClass = i < 3 ? `rank-${i + 1}` : '';
+        const medal = i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+        const pct = maxAvg > 0 ? (p.avg / maxAvg * 100) : 0;
+        html += `<tr>
+            <td><span class="rank ${rankClass}">${medal || (i + 1)}</span></td>
+            <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${p.groupTag || ''}</span></td>
+            <td>
+                ${p.avg.toFixed(1)}
+                <div class="games-bar"><div class="games-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,var(--purple),var(--blue))"></div></div>
+            </td>
+            <td style="font-size:0.85rem;color:var(--text-muted)">${p.games}</td>
+            <td style="font-size:0.85rem;color:var(--text-muted)">${p.weeksPlayed}</td>
+        </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+    return html;
+}
+
 function updateLeaderboard() {
     const data = loadData();
     const allPlayers = getAllPlayers(data);
@@ -1200,9 +1582,11 @@ function updateLeaderboard() {
     const regulars = allEntries.filter(p => !p.isSubOrFillIn).sort((a, b) => b.avg - a.avg || b.games - a.games);
     const subs = allEntries.filter(p => p.isSubOrFillIn).sort((a, b) => b.avg - a.avg || b.games - a.games);
 
+    const lastSeasonHtml = renderLastSeasonStandings(data);
+
     if ((regulars.length === 0 && subs.length === 0) || completedWeeks === 0) {
-        document.getElementById('leaderboardContent').innerHTML = `
-            <div class="empty-state"><div class="emoji">📊</div><p>No scores recorded yet.</p></div>`;
+        document.getElementById('leaderboardContent').innerHTML = lastSeasonHtml + `
+            <div class="empty-state"><div class="emoji">📊</div><p>No scores recorded yet this season.</p></div>`;
         return;
     }
 
@@ -1231,31 +1615,7 @@ function updateLeaderboard() {
 
     html += '</tbody></table>';
 
-    // Subs/fill-ins in a separate section below
-    if (subs.length > 0) {
-        html += `<div style="margin-top:1.5rem;">
-            <h3 style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">🟠 Substitute Appearances</h3>
-            <table class="leaderboard-table" style="opacity:0.6;">
-            <thead><tr>
-                <th>#</th><th>Player</th><th>Avg/Week</th><th>Total</th><th>Weeks</th>
-            </tr></thead><tbody>`;
-        subs.forEach((p, i) => {
-            const pct = maxAvg > 0 ? (p.avg / maxAvg * 100) : 0;
-            html += `<tr>
-                <td><span class="rank">${i + 1}</span></td>
-                <td><strong>${p.name}</strong> <span style="font-size:0.7rem;color:var(--text-muted)">${p.groupTag}</span></td>
-                <td>
-                    ${p.avg.toFixed(1)}
-                    <div class="games-bar"><div class="games-bar-fill" style="width:${pct}%"></div></div>
-                </td>
-                <td style="font-size:0.85rem;color:var(--text-muted)">${p.games}</td>
-                <td style="font-size:0.85rem;color:var(--text-muted)">${p.weeksPlayed}</td>
-            </tr>`;
-        });
-        html += '</tbody></table></div>';
-    }
-
-    document.getElementById('leaderboardContent').innerHTML = html;
+    document.getElementById('leaderboardContent').innerHTML = lastSeasonHtml + html;
 }
 
 // ==================== HISTORY ====================
@@ -1307,13 +1667,15 @@ function deleteWeek(weekIndex) {
     const week = data.weeks[weekIndex];
     if (!confirm(`Delete Week ${week.number} (${week.date})? This will remove all scores and pairings for this week.`)) return;
 
-    // Remove the pairings from history
     removePairingsForWeek(data, week);
-
     data.weeks.splice(weekIndex, 1);
-
-    // Renumber remaining weeks
     data.weeks.forEach((w, i) => w.number = i + 1);
+
+    // Unlock the corresponding schedule slot so it can be regenerated
+    if (data.scheduleWeeks && data.scheduleWeeks[weekIndex]) {
+        data.scheduleWeeks[weekIndex].locked = false;
+        // Keep existing players (including any subs) so user can tweak and regenerate
+    }
 
     saveData(data);
     updateHistory();
@@ -1322,6 +1684,31 @@ function deleteWeek(weekIndex) {
     loadWeek();
     updateSeasonBar();
     showToast('Week deleted 🗑');
+}
+
+function ungenerateWeek(weekIndex) {
+    const data = loadData();
+    const week = data.weeks[weekIndex];
+    if (!confirm(`Ungenerate Week ${week.number} (${week.date})? Matches and pairings will be removed so you can regenerate with updated players.`)) return;
+
+    removePairingsForWeek(data, week);
+    data.weeks.splice(weekIndex, 1);
+    data.weeks.forEach((w, i) => w.number = i + 1);
+
+    // Unlock the schedule slot and reset customised flag so the corrected
+    // schedule players are used on next generate
+    if (data.scheduleWeeks && data.scheduleWeeks[weekIndex]) {
+        data.scheduleWeeks[weekIndex].locked = false;
+        data.scheduleWeeks[weekIndex].customised = false;
+    }
+
+    saveData(data);
+    populateWeekSelect();
+    loadWeek();
+    updateSeasonBar();
+    showSection('schedule');
+    renderSchedule();
+    showToast('Week ungenerated — update players and recreate 🔄');
 }
 
 function removePairingsForWeek(data, week) {
@@ -1642,7 +2029,7 @@ function showSection(id) {
     event.target.classList.add('active');
     if (id === 'leaderboard') updateLeaderboard();
     if (id === 'history') updateHistory();
-    if (id === 'nextweek') renderNextWeek();
+    if (id === 'schedule') refreshAndRenderSchedule();
     if (id === 'gallery') renderGallery();
     if (id === 'players') renderRosters();
 }
@@ -1681,10 +2068,33 @@ function showToast(message) {
 }
 
 function resetSeason() {
-    if (!confirm('⚠️ This will delete ALL data including players, scores, and history. Are you sure?')) return;
-    localStorage.removeItem(STORAGE_KEY);
+    if (!confirm('⚠️ Start a new season? This will clear all weeks, scores, match history, and schedule overrides. Rosters and playlists are kept. Are you sure?')) return;
+
+    const data = loadData();
+
+    // Keep playlists and last season archive — always re-seed rosters from defaults
+    const fresh = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    fresh.groupA = [...DEFAULT_GROUP_A];
+    fresh.groupB = [...DEFAULT_GROUP_B];
+    fresh.subs = [];
+    fresh.playlists = data.playlists || [];
+    fresh.lastSeasonStandings = data.lastSeasonStandings || [];
+    fresh.scheduleWeeks = []; // will be rebuilt from default rosters on next renderSchedule()
+
+    // Write clean data to localStorage immediately
+    _cachedData = fresh;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+
+    // Push the clean slate to the cloud so it doesn't reload old data
+    _pendingSave = JSON.parse(JSON.stringify(fresh));
+    updateSyncIndicator('saving');
+    _doCloudSave().then(() => {
+        showToast('New season started! 🏆');
+    });
+
     init();
-    showToast('Season reset! 🔄');
+    updateHistory();
+    renderSchedule();
 }
 
 function exportData() {
@@ -2138,8 +2548,8 @@ const DEFAULT_PLAYLISTS = [
     'spotify:playlist:6AySIqy8RMKjtSeNfBxs2Q',
 ];
 
-const DEFAULT_GROUP_A = ['Louise', 'Ullis', 'Ida', 'Cecilia', 'Gabbi', 'Sara B', 'Amelie', 'Anna'];
-const DEFAULT_GROUP_B = ['Monica', 'Sara C', 'Ida', 'Cecilia', 'Gabbi', 'Sara B', 'Amelie', 'Anna'];
+const DEFAULT_GROUP_A = ['Anna V', 'Sara B', 'Gabbi', 'Sara Ö', 'Cecilia', 'Sofie', 'Sara C', 'Ida'];
+const DEFAULT_GROUP_B = ['Anna V', 'Sara B', 'Gabbi', 'Sara Ö', 'Cecilia', 'Sofie', 'Monica', 'Amelie'];
 
 function renderAll() {
     renderRosters();

@@ -16,13 +16,13 @@
     <div class="header-bg-slide" id="headerBgSlideB"></div>
     <div class="header-bg-overlay"></div>
     <h1>🏆 Smashing <span>Ladies</span></h1>
-    <p>Season 2026 • Rotating Rosters • 26 Weeks • 1 Champion</p>
+    <p>Season 2 • Rotating Rosters • 19 Weeks • 1 Champion</p>
     <div id="syncIndicator" style="position:relative;z-index:2;margin-top:0.5rem;font-size:0.75rem;font-weight:500;min-height:1.2em;"></div>
 </div>
 
 <div class="nav">
     <button class="active" onclick="showSection('matchday')">📋 Match Day</button>
-    <button onclick="showSection('nextweek')">📅 Next Week</button>
+    <button onclick="showSection('schedule')">📅 Schedule</button>
     <button onclick="showSection('leaderboard')">🏅 Leaderboard</button>
     <button onclick="showSection('history')">📜 History</button>
     <button onclick="showSection('gallery')">📸 Gallery</button>
@@ -57,16 +57,11 @@
         </div>
     </div>
 
-    <!-- NEXT WEEK PLANNER -->
-    <div id="nextweek" class="section">
-        <div class="card next-week-card">
-            <h2>📅 Next Week Planner</h2>
-            <div id="nextWeekInfo"></div>
-            <div id="nextWeekRoster"></div>
-            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem;">
-                <button class="btn btn-primary" onclick="confirmAndGenerate()">🎲 Confirm & Generate Matches</button>
-                <button class="btn btn-secondary" onclick="resetNextWeekToDefault()">🔄 Reset to Default Roster</button>
-            </div>
+    <!-- SEASON SCHEDULE -->
+    <div id="schedule" class="section">
+        <div class="card" style="background:linear-gradient(135deg,rgba(245,197,66,0.06),rgba(245,197,66,0.02));border:1px solid rgba(245,197,66,0.25);">
+            <h2>📅 Season Schedule</h2>
+            <div id="scheduleContent"></div>
         </div>
     </div>
 
@@ -79,6 +74,9 @@
                     <div class="emoji">📊</div>
                     <p>No scores recorded yet.</p>
                 </div>
+            </div>
+            <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+                <button class="btn btn-secondary" onclick="saveAsLastSeason()" style="font-size:0.8rem;">📦 Archive current standings as Last Season</button>
             </div>
         </div>
     </div>
@@ -158,14 +156,14 @@
                 <strong>How it works:</strong> Group A and Group B alternate each week. Subs can fill in for anyone who can't make it.
             </div>
 
-            <h3>🔵 Group A — Odd weeks (Jan 6, Jan 20, ...)</h3>
+            <h3>🔵 Group A — Odd calendar weeks (Aug 25, Sep 8, ...) — Anna V, Sara B, Gabbi, Sara Ö, Cecilia, Sofie, Sara C, Ida</h3>
             <div class="add-player-form">
                 <input type="text" id="newPlayerA" placeholder="Add to Group A..." onkeypress="if(event.key==='Enter')addRosterPlayer('A')">
                 <button class="btn btn-primary" onclick="addRosterPlayer('A')">Add</button>
             </div>
             <div class="player-grid" id="groupAGrid" style="margin-bottom: 1.5rem;"></div>
 
-            <h3>🟣 Group B — Even weeks (Jan 13, Jan 27, ...)</h3>
+            <h3>🟣 Group B — Even calendar weeks (Aug 18, Sep 1, ...) — Anna V, Sara B, Gabbi, Sara Ö, Cecilia, Sofie, Monica, Amelie</h3>
             <div class="add-player-form">
                 <input type="text" id="newPlayerB" placeholder="Add to Group B..." onkeypress="if(event.key==='Enter')addRosterPlayer('B')">
                 <button class="btn btn-primary" onclick="addRosterPlayer('B')">Add</button>
@@ -198,7 +196,7 @@
         <div class="card">
             <h2>⚙️ Season Management</h2>
             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                <button class="btn btn-danger" onclick="resetSeason()">🗑 Reset Season</button>
+                <button class="btn btn-danger" onclick="resetSeason()">🆕 Start New Season</button>
                 <button class="btn btn-secondary" onclick="exportData()">📤 Export Data</button>
                 <button class="btn btn-secondary" onclick="importData()">📥 Import Data</button>
             </div>
