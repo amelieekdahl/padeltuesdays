@@ -184,11 +184,9 @@ function mergeCloudAndLocal(cloud, local) {
     }
     base.scheduleWeeks = baseWeeks;
 
-    // weeks (generated matches) — take the longer list (more matches generated)
-    if ((other.weeks || []).length > (base.weeks || []).length) {
-        base.weeks = other.weeks;
-        base.pairingHistory = other.pairingHistory;
-    }
+    // weeks (generated matches) — always trust the base (newer lastSaved wins overall).
+    // The old "longer list wins" logic was wrong: it pulled back old-season matches
+    // because the previous season had more weeks than the new one.
 
     return base;
 }
