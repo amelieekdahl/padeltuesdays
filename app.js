@@ -31,6 +31,8 @@ let _saving = false;     // is a save in progress?
 let _pendingSave = null; // latest data waiting to be saved
 
 function saveData(data) {
+    // Stamp a save timestamp so we can resolve conflicts across devices
+    data.lastSaved = Date.now();
     // Save to localStorage immediately (fast)
     _cachedData = data;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -118,14 +120,12 @@ async function _doCloudSave() {
 
             if (cloudText && cloudText.trim() !== '' && cloudText.trim() !== '{}') {
                 const cloudData = JSON.parse(cloudText);
+                // Verify by seasonId + week count — don't reject on JSON length differences
                 if (cloudData && cloudData.weeks !== undefined &&
-                    cloudData.weeks.length === dataToSave.weeks.length) {
-                    // Deep compare: check total data length as a sanity check
-                    const cloudStr = JSON.stringify(cloudData);
-                    if (Math.abs(cloudStr.length - dataStr.length) < 100) {
-                        success = true;
-                        break;
-                    }
+                    cloudData.weeks.length === dataToSave.weeks.length &&
+                    (cloudData.seasonId || 0) === (dataToSave.seasonId || 0)) {
+                    success = true;
+                    break;
                 }
             }
             console.warn(`Cloud verify mismatch (attempt ${attempt + 1}), retrying...`);
@@ -168,15 +168,15 @@ async function loadFromCloud() {
         }
         const data = JSON.parse(text);
         if (data && data.groupA !== undefined) {
-            // Compare cloud vs local — the one with more weeks wins
             const localRaw = localStorage.getItem(STORAGE_KEY);
             const localData = localRaw ? JSON.parse(localRaw) : null;
-            const cloudWeeks = (data.weeks || []).length;
-            const localWeeks = localData ? (localData.weeks || []).length : 0;
+            const cloudSeasonId = data.seasonId || 0;
+            const localSeasonId = localData ? (localData.seasonId || 0) : 0;
 
-            if (localWeeks > cloudWeeks) {
-                // Local has newer data — push it to cloud
-                console.warn(`Local has ${localWeeks} weeks, cloud has ${cloudWeeks}. Pushing local to cloud.`);
+            // If local has a newer seasonId, it means a "Start New Season" was done
+            // locally but hasn't fully pushed yet — local wins, push it to cloud.
+            if (localSeasonId > cloudSeasonId) {
+                console.warn(`Local seasonId ${localSeasonId} > cloud seasonId ${cloudSeasonId}. Pushing local to cloud.`);
                 _cachedData = localData;
                 _dataLoaded = true;
                 updateSyncIndicator('saving');
@@ -185,7 +185,20 @@ async function loadFromCloud() {
                 return localData;
             }
 
-            // Cloud data wins — overwrite localStorage
+            // Same season — use whichever was saved most recently
+            const cloudSaved = data.lastSaved || 0;
+            const localSaved = localData ? (localData.lastSaved || 0) : 0;
+            if (localSaved > cloudSaved) {
+                // Local is newer — push it to cloud rather than overwriting it
+                console.warn(`Local lastSaved ${localSaved} > cloud lastSaved ${cloudSaved}. Keeping local.`);
+                _cachedData = localData;
+                _dataLoaded = true;
+                updateSyncIndicator('saving');
+                _pendingSave = JSON.parse(JSON.stringify(localData));
+                setTimeout(() => _doCloudSave(), 500);
+                return localData;
+            }
+            // Cloud is newer — overwrite local
             _cachedData = data;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
             _dataLoaded = true;
@@ -393,14 +406,20 @@ function removeRosterPlayer(group, index) {
 }
 
 // ==================== SEASON SCHEDULE ====================
-async function refreshAndRenderSchedule() {
-    // Show a brief loading state so it's clear a refresh is happening
-    const container = document.getElementById('scheduleContent');
-    if (container) container.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">☁️ Refreshing...</div>';
+let _lastCloudFetch = 0;
+const CLOUD_FETCH_THROTTLE_MS = 30000; // only re-fetch from cloud every 30s
 
-    // Re-fetch from cloud so cross-device edits (e.g. a sub added on another phone) are visible
-    const fresh = await loadFromCloud();
-    _cachedData = fresh;
+async function refreshAndRenderSchedule() {
+    const now = Date.now();
+    const shouldRefetch = (now - _lastCloudFetch) > CLOUD_FETCH_THROTTLE_MS;
+
+    if (shouldRefetch) {
+        const container = document.getElementById('scheduleContent');
+        if (container) container.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">☁️ Refreshing...</div>';
+        const fresh = await loadFromCloud();
+        _cachedData = fresh;
+        _lastCloudFetch = Date.now();
+    }
 
     renderSchedule();
 }
@@ -627,7 +646,12 @@ function generateFromSchedule() {
 
     const pairs = generatePairings(roster, data.pairingHistory);
     const courts = assignCourts(pairs);
-    for (const pair of pairs) data.pairingHistory.push(pair);
+    // Record partners
+    for (const pair of pairs) data.pairingHistory.push([...pair, 'partner']);
+    // Record opponents (court1: pairs[0] vs pairs[1], court2: pairs[2] vs pairs[3])
+    for (const [a, b] of [[pairs[0],pairs[1]], [pairs[2],pairs[3]]]) {
+        for (const p of a) for (const q of b) data.pairingHistory.push([p, q, 'opponent']);
+    }
 
     const playlists = data.playlists || [];
     const playlistUri = playlists.length > 0 ? playlists[(weekNum - 1) % playlists.length] : null;
@@ -879,8 +903,9 @@ function confirmAndGenerate() {
     const pairs = generatePairings(roster, data.pairingHistory);
     const courts = assignCourts(pairs);
 
-    for (const pair of pairs) {
-        data.pairingHistory.push(pair);
+    for (const pair of pairs) data.pairingHistory.push([...pair, 'partner']);
+    for (const [a, b] of [[pairs[0],pairs[1]], [pairs[2],pairs[3]]]) {
+        for (const p of a) for (const q of b) data.pairingHistory.push([p, q, 'opponent']);
     }
 
     const weekNum = data.weeks.length + 1;
@@ -939,70 +964,108 @@ function confirmAndGenerate() {
 
 // ==================== PAIRING ALGORITHM ====================
 function generatePairings(players, pairingHistory) {
-    // Shuffle players first for randomness — ensures different results each time
+    // pairingHistory entries are either:
+    //   [a, b]             — a and b were partners (legacy format)
+    //   [a, b, 'partner']  — explicit partner record
+    //   [a, b, 'opponent'] — explicit opponent record
+
     const shuffled = [...players].sort(() => Math.random() - 0.5);
 
-    // Build pair count map for this week's players
-    const pairCount = {};
+    // Build partner and opponent count maps for this week's players
+    const partnerCount = {};
+    const opponentCount = {};
     for (const p of shuffled) {
         for (const q of shuffled) {
-            if (p < q) pairCount[p + '|' + q] = 0;
+            if (p < q) {
+                partnerCount[p + '|' + q] = 0;
+                opponentCount[p + '|' + q] = 0;
+            }
         }
     }
-    for (const [a, b] of pairingHistory) {
+
+    for (const entry of pairingHistory) {
+        const [a, b, type] = entry;
         const key = a < b ? a + '|' + b : b + '|' + a;
-        if (pairCount[key] !== undefined) pairCount[key]++;
-    }
-
-    // For each player, find the minimum times they've been paired with
-    // any of the other players this week. A pairing is only "fair" if
-    // both players in the pair have their count at the global minimum
-    // for that player — i.e., they haven't played together yet in the
-    // current round-robin cycle.
-    //
-    // playerMin[p] = the fewest times p has been paired with any of
-    // this week's other players. A pair (p, q) with count > min(p) AND
-    // count > min(q) means both p and q have un-played partners left,
-    // so pairing them is unfair.
-
-    const playerMin = {};
-    for (const p of shuffled) {
-        let min = Infinity;
-        for (const q of shuffled) {
-            if (p === q) continue;
-            const key = p < q ? p + '|' + q : q + '|' + p;
-            min = Math.min(min, pairCount[key] || 0);
+        if (type === 'opponent') {
+            if (opponentCount[key] !== undefined) opponentCount[key]++;
+        } else {
+            // 'partner' or legacy (no type) — count as partner
+            if (partnerCount[key] !== undefined) partnerCount[key]++;
         }
-        playerMin[p] = min;
     }
 
-    // Collect ALL optimal pairings (tied for best score), then pick one randomly
-    let bestPairings = [];
-    let bestScore = Infinity;
-
+    // Score a full set of 4 pairs (2 courts × 2 partner pairs).
+    // A "court" is two pairs that play against each other.
+    // We score both partnership repetition and opponent repetition.
+    // Priority: fewest partner violations > fewest opponent violations >
+    //           lowest max partner count > lowest total partner count
     function scorePairing(pairs) {
-        let violations = 0;   // pairs where both players have cheaper options
-        let maxCount = 0;
-        let totalCount = 0;
+        // pairs = [[p1,p2], [p3,p4], [p5,p6], [p7,p8]]
+        // Court assignments: pairs[0] vs pairs[1], pairs[2] vs pairs[3]
+        let partnerViolations = 0;
+        let opponentViolations = 0;
+        let maxPartner = 0;
+        let totalPartner = 0;
+        let totalOpponent = 0;
+
+        // Partner counts
+        const partnerMins = {};
+        for (const p of shuffled) {
+            let min = Infinity;
+            for (const q of shuffled) {
+                if (p === q) continue;
+                const k = p < q ? p + '|' + q : q + '|' + p;
+                min = Math.min(min, partnerCount[k] || 0);
+            }
+            partnerMins[p] = min;
+        }
+
+        // Opponent mins
+        const opponentMins = {};
+        for (const p of shuffled) {
+            let min = Infinity;
+            for (const q of shuffled) {
+                if (p === q) continue;
+                const k = p < q ? p + '|' + q : q + '|' + p;
+                min = Math.min(min, opponentCount[k] || 0);
+            }
+            opponentMins[p] = min;
+        }
 
         for (const [a, b] of pairs) {
-            const key = a < b ? a + '|' + b : b + '|' + a;
-            const count = pairCount[key] || 0;
-
-            // A violation: this pair has played together more than
-            // the minimum for BOTH players — meaning both have
-            // partners they haven't played with yet (or played less)
-            if (count > playerMin[a] && count > playerMin[b]) {
-                violations++;
-            }
-
-            maxCount = Math.max(maxCount, count);
-            totalCount += count;
+            const pk = a < b ? a + '|' + b : b + '|' + a;
+            const pc = partnerCount[pk] || 0;
+            if (pc > partnerMins[a] && pc > partnerMins[b]) partnerViolations++;
+            maxPartner = Math.max(maxPartner, pc);
+            totalPartner += pc;
         }
 
-        // Priority: fewest violations >>> lowest max count >>> lowest total
-        return violations * 1000000 + maxCount * 1000 + totalCount;
+        // Opponent pairs: court 1 = pairs[0] vs pairs[1], court 2 = pairs[2] vs pairs[3]
+        const opponentPairs = [
+            [pairs[0][0], pairs[1][0]], [pairs[0][0], pairs[1][1]],
+            [pairs[0][1], pairs[1][0]], [pairs[0][1], pairs[1][1]],
+            [pairs[2][0], pairs[3][0]], [pairs[2][0], pairs[3][1]],
+            [pairs[2][1], pairs[3][0]], [pairs[2][1], pairs[3][1]],
+        ];
+        for (const [a, b] of opponentPairs) {
+            const ok = a < b ? a + '|' + b : b + '|' + a;
+            const oc = opponentCount[ok] || 0;
+            if (oc > opponentMins[a] && oc > opponentMins[b]) opponentViolations++;
+            totalOpponent += oc;
+        }
+
+        // Weighted score: partner fairness matters most, then opponent fairness
+        return partnerViolations * 10000000 +
+               opponentViolations * 100000 +
+               maxPartner * 1000 +
+               totalPartner * 10 +
+               totalOpponent;
     }
+
+    // Enumerate all ways to partition 8 players into 4 pairs,
+    // then score each partition as two courts (pair[0] vs pair[1], pair[2] vs pair[3])
+    let bestPairings = [];
+    let bestScore = Infinity;
 
     function findMatchings(remaining, current) {
         if (remaining.length === 0) {
@@ -1019,11 +1082,9 @@ function generatePairings(players, pairingHistory) {
         const first = remaining[0];
         const rest = remaining.slice(1);
 
-        // Sort candidates: prefer partners this player has played with least
-        // Add random tiebreaker so same-count partners aren't always in the same order
         const candidates = rest.map((partner, i) => {
             const key = first < partner ? first + '|' + partner : partner + '|' + first;
-            return { partner, i, count: pairCount[key] || 0, rand: Math.random() };
+            return { partner, i, count: partnerCount[key] || 0, rand: Math.random() };
         }).sort((a, b) => a.count - b.count || a.rand - b.rand);
 
         for (const { partner, i } of candidates) {
@@ -1036,7 +1097,6 @@ function generatePairings(players, pairingHistory) {
 
     findMatchings(shuffled, []);
 
-    // Pick a random optimal pairing
     return bestPairings[Math.floor(Math.random() * bestPairings.length)];
 }
 
@@ -2014,10 +2074,18 @@ function saveMatchModal() {
 
 function addPairingsForWeek(data, week) {
     if (!week.firstHalf) return;
-    for (const courtKey of Object.keys(week.firstHalf)) {
-        const court = week.firstHalf[courtKey];
-        if (court.teamA && court.teamA.length === 2) data.pairingHistory.push([...court.teamA]);
-        if (court.teamB && court.teamB.length === 2) data.pairingHistory.push([...court.teamB]);
+    const courts = Object.values(week.firstHalf);
+    for (const court of courts) {
+        if (court.teamA && court.teamA.length === 2) data.pairingHistory.push([...court.teamA, 'partner']);
+        if (court.teamB && court.teamB.length === 2) data.pairingHistory.push([...court.teamB, 'partner']);
+    }
+    // Record opponents for each court
+    for (const court of courts) {
+        if (court.teamA && court.teamB) {
+            for (const p of court.teamA) for (const q of court.teamB) {
+                data.pairingHistory.push([p, q, 'opponent']);
+            }
+        }
     }
 }
 
@@ -2080,6 +2148,7 @@ function resetSeason() {
     fresh.playlists = data.playlists || [];
     fresh.lastSeasonStandings = data.lastSeasonStandings || [];
     fresh.scheduleWeeks = []; // will be rebuilt from default rosters on next renderSchedule()
+    fresh.seasonId = Date.now(); // bump so local always wins over stale cloud data
 
     // Write clean data to localStorage immediately
     _cachedData = fresh;
