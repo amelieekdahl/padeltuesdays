@@ -153,6 +153,46 @@ async function _doCloudSave() {
     if (_pendingSave) _doCloudSave();
 }
 
+function mergeCloudAndLocal(cloud, local) {
+    // Start from whichever has the newer overall lastSaved as the base,
+    // then overlay per-week schedule edits from the other side if they're newer.
+    if (!local) return cloud;
+
+    const cloudSaved = cloud.lastSaved || 0;
+    const localSaved = local.lastSaved || 0;
+    const base = JSON.parse(JSON.stringify(cloudSaved >= localSaved ? cloud : local));
+    const other = cloudSaved >= localSaved ? local : cloud;
+
+    // Merge scheduleWeeks: for each week, pick the version with the newer
+    // per-week timestamp (set when a player edits their slot).
+    const baseWeeks = base.scheduleWeeks || [];
+    const otherWeeks = other.scheduleWeeks || [];
+    const totalWeeks = Math.max(baseWeeks.length, otherWeeks.length);
+
+    for (let i = 0; i < totalWeeks; i++) {
+        const bw = baseWeeks[i];
+        const ow = otherWeeks[i];
+        if (!ow) continue; // other doesn't have this week
+        if (!bw) { baseWeeks[i] = ow; continue; }
+
+        // If the other week was edited more recently, use it
+        const bTime = bw.lastEdited || 0;
+        const oTime = ow.lastEdited || 0;
+        if (oTime > bTime) {
+            baseWeeks[i] = ow;
+        }
+    }
+    base.scheduleWeeks = baseWeeks;
+
+    // weeks (generated matches) — take the longer list (more matches generated)
+    if ((other.weeks || []).length > (base.weeks || []).length) {
+        base.weeks = other.weeks;
+        base.pairingHistory = other.pairingHistory;
+    }
+
+    return base;
+}
+
 async function loadFromCloud() {
     updateSyncIndicator('loading');
     try {
@@ -185,25 +225,24 @@ async function loadFromCloud() {
                 return localData;
             }
 
-            // Same season — use whichever was saved most recently
+            // Same season — merge per-week schedule edits so concurrent
+            // edits from different devices are both preserved.
+            const merged = mergeCloudAndLocal(data, localData);
+            _cachedData = merged;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            _dataLoaded = true;
+
+            // If our local had anything newer, push the merged result back up
             const cloudSaved = data.lastSaved || 0;
             const localSaved = localData ? (localData.lastSaved || 0) : 0;
             if (localSaved > cloudSaved) {
-                // Local is newer — push it to cloud rather than overwriting it
-                console.warn(`Local lastSaved ${localSaved} > cloud lastSaved ${cloudSaved}. Keeping local.`);
-                _cachedData = localData;
-                _dataLoaded = true;
                 updateSyncIndicator('saving');
-                _pendingSave = JSON.parse(JSON.stringify(localData));
+                _pendingSave = JSON.parse(JSON.stringify(merged));
                 setTimeout(() => _doCloudSave(), 500);
-                return localData;
+            } else {
+                updateSyncIndicator('saved');
             }
-            // Cloud is newer — overwrite local
-            _cachedData = data;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-            _dataLoaded = true;
-            updateSyncIndicator('saved');
-            return data;
+            return merged;
         }
     } catch (e) {
         console.warn('Cloud load failed, using localStorage:', e);
@@ -612,6 +651,7 @@ function updateScheduleSlot(weekIdx, slotIdx, value) {
     // __typing__ is a sentinel: store zwsp so re-render shows blank text input
     data.scheduleWeeks[weekIdx].players[slotIdx] = value === '__typing__' ? '\u200b' : value;
     data.scheduleWeeks[weekIdx].customised = true; // preserve against auto-reseed
+    data.scheduleWeeks[weekIdx].lastEdited = Date.now(); // for cross-device merge
     saveData(data);
     renderSchedule();
 }
