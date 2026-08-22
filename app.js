@@ -154,17 +154,33 @@ async function _doCloudSave() {
 }
 
 function mergeCloudAndLocal(cloud, local) {
-    // Start from whichever has the newer overall lastSaved as the base,
-    // then overlay per-week schedule edits from the other side if they're newer.
     if (!local) return cloud;
 
+    const cloudSeasonId = cloud.seasonId || 0;
+    const localSeasonId = local.seasonId || 0;
+
+    // seasonId is the absolute authority — a newer seasonId means a full reset
+    // was performed and NOTHING from the older season should survive.
+    if (localSeasonId > cloudSeasonId) {
+        // Local is a newer season — use it entirely, ignore cloud
+        return JSON.parse(JSON.stringify(local));
+    }
+    if (cloudSeasonId > localSeasonId) {
+        // Cloud is a newer season — use it entirely, ignore local
+        return JSON.parse(JSON.stringify(cloud));
+    }
+
+    // Same season — merge per-week schedule edits so concurrent edits
+    // from different devices are both preserved.
     const cloudSaved = cloud.lastSaved || 0;
     const localSaved = local.lastSaved || 0;
+
+    // Base = whichever has the newer overall lastSaved (has the most up-to-date
+    // weeks/scores/leaderboard data)
     const base = JSON.parse(JSON.stringify(cloudSaved >= localSaved ? cloud : local));
     const other = cloudSaved >= localSaved ? local : cloud;
 
-    // Merge scheduleWeeks: for each week, pick the version with the newer
-    // per-week timestamp (set when a player edits their slot).
+    // Overlay per-week schedule edits from the other side if they're newer
     const baseWeeks = base.scheduleWeeks || [];
     const otherWeeks = other.scheduleWeeks || [];
     const totalWeeks = Math.max(baseWeeks.length, otherWeeks.length);
@@ -172,21 +188,13 @@ function mergeCloudAndLocal(cloud, local) {
     for (let i = 0; i < totalWeeks; i++) {
         const bw = baseWeeks[i];
         const ow = otherWeeks[i];
-        if (!ow) continue; // other doesn't have this week
+        if (!ow) continue;
         if (!bw) { baseWeeks[i] = ow; continue; }
-
-        // If the other week was edited more recently, use it
         const bTime = bw.lastEdited || 0;
         const oTime = ow.lastEdited || 0;
-        if (oTime > bTime) {
-            baseWeeks[i] = ow;
-        }
+        if (oTime > bTime) baseWeeks[i] = ow;
     }
     base.scheduleWeeks = baseWeeks;
-
-    // weeks (generated matches) — always trust the base (newer lastSaved wins overall).
-    // The old "longer list wins" logic was wrong: it pulled back old-season matches
-    // because the previous season had more weeks than the new one.
 
     return base;
 }
